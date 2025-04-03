@@ -1,3 +1,5 @@
 {
      "reportOptionalMemberAccess": "none",
+     "reportOptionalSubscript": "none",
+     //"reportArgumentType": "none"
 }

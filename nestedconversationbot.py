@@ -310,7 +310,7 @@ async def stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str
 def main() -> None:
     """Run the bot."""
     # Create the Application and pass it your bot's token.
-    application = Application.builder().token("8067210796:AAH7X1fWCNeZH32VRCKGfvbOLzNeGQnn2P4").build()
+    application = Application.builder().token("8067210796:AAFrkufT_K8DHSXD_bZS0t_8Mfmjv7AuulU").build()
 
     # Set up third level ConversationHandler (collecting features)
     description_conv = ConversationHandler(

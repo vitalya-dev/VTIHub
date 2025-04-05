@@ -100,5 +100,25 @@
 | [                          ]     |
 | [                          ]     |
 |                                  |
-|  [🖨️ Print]    |
+| [🖨️ Print]   [⬅️ Back]   |
 +----------------------------------+
+
+
+
+
+PrintBot – Telegram Sticker Printer App
+
+Zero Clicks to Start: Open app → Start typing.
+
+Telegram as History: No built-in dashboard; repair shop workers use the group chat as their “ongoing jobs” list.
+
+
+Reprint & History Workflow
+
+    From Telegram Group: Click [Open] on any message to launch the app.
+
+    Ticket View: Displays original job details
+
+    No Local Storage Needed: History is managed via the Telegram group’s message history.
+
+

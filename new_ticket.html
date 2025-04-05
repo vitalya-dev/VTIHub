@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepairPro - New Ticket</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .ticket-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .header {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        input[type="tel"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:active {
+            opacity: 0.7;
+        }
+
+        .print-btn {
+            background-color: #2481d7;  /* Blue for primary action */
+            color: white;
+        }
+
+        .back-btn {
+            background-color: #e5e5ea;  /* Light gray for secondary */
+            color: #1a1a1a;
+        }
+    </style>
+</head>
+<body>
+    <div class="ticket-container">
+        <div class="header">➕ New Ticket</div>
+        
+        <div class="input-group">
+            <label>📞 Customer Phone Number</label>
+            <input 
+                type="tel" 
+                inputmode="numeric" 
+                pattern="[0-9]*" 
+                placeholder="Enter phone number"
+                enterkeyhint="next"
+            >
+        </div>
+
+        <div class="input-group">
+            <label>💬 Problem Description</label>
+            <textarea 
+                placeholder="Describe the problem..."
+                inputmode="text"
+                enterkeyhint="done"
+                autocapitalize="sentences"
+                spellcheck="true"
+                data-gramm="false"
+            ></textarea>
+        </div>
+
+        <div class="button-group">
+            <button class="back-btn" onclick="">⬅️ Back</button>
+            <button class="print-btn" onclick="">🖨️ Print</button>
+        </div>
+    </div>
+</body>
+</html>

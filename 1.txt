@@ -1,7 +1,3 @@
-Absolutely! Here's a full description of **your current app**, based on everything we've built and designed so far:
-
----
-
 # 💻 RepairPro – Telegram Mini App for Repair Shops
 
 **RepairPro** is a lightweight, fast, and intuitive **Telegram Web App** designed specifically for **computer/mobile repair shops** to manage customer check-ins and generate printable repair tickets — all from within Telegram.
@@ -79,17 +75,17 @@ Absolutely! Here's a full description of **your current app**, based on everythi
 | ☎️ 1234567890                          |
 | 💬 "Screen won’t turn on"              |
 | 🕒 2025-03-29 14:31                    |
-| [🔍 Open]                              |
+| [🖨️ Print]                              |
 |----------------------------------------|
 | ☎️ 9876543210                          |
 | 💬 "Blue screen after login"           |
 | 🕒 2025-03-29 13:22                    |
-| [🔍 Open]                              |
+| [🖨️ Print]                              |
 |----------------------------------------|
 | ☎️ 5551234567                          |
 | 💬 "Missing keyboard keys"             |
 | 🕒 2025-03-28 17:05                    |
-| [🔍 Open]                              |
+| [🖨️ Print]                               |
 +----------------------------------------+
 
 
@@ -104,5 +100,5 @@ Absolutely! Here's a full description of **your current app**, based on everythi
 | [                          ]     |
 | [                          ]     |
 |                                  |
-| [🖨️ Print]  [✅ Save]  [⬅️ Back]   |
+|  [🖨️ Print]    |
 +----------------------------------+

@@ -112,13 +112,11 @@ Zero Clicks to Start: Open app → Start typing.
 
 Telegram as History: No built-in dashboard; repair shop workers use the group chat as their “ongoing jobs” list.
 
+Click [Open] on any message to launch the app.
 
-Reprint & History Workflow
+No Local Storage Needed: History is managed via the Telegram group’s message history.
 
-    From Telegram Group: Click [Open] on any message to launch the app.
 
-    Ticket View: Displays original job details
 
-    No Local Storage Needed: History is managed via the Telegram group’s message history.
 
 

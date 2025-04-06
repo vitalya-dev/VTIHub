@@ -1,13 +1,22 @@
 from telegram import Update, BotCommand, MenuButtonWebApp, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+async def setup_commands(application: Application):
+    """Set bot commands menu (shown in /help)"""
+    await application.bot.set_my_commands([
+        BotCommand("start", "Open PrintBot interface"),
+        BotCommand("help", "Get assistance")
+    ])
+
 async def setup_menu_button(application: Application):
+    """Set persistent web app button"""
     await application.bot.set_chat_menu_button(
         menu_button=MenuButtonWebApp(
             text="🖨 New Print Job",
             web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
         )
     )
+
 
 async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Fallback for any text messages"""
@@ -16,24 +25,26 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "(If you don't see it, update your Telegram app)"
     )
 
-def main():
+async def post_init(application: Application):
+    """Combine all setup tasks"""
+    await setup_commands(application)
+    await setup_menu_button(application)
+
+if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--token', required=True, help='Telegram bot token')
     args = parser.parse_args()
     
-    application = Application.builder().token(args.token).post_init(setup_menu_button).build()
+    # Build application with post_init hook
+    application = Application.builder() \
+        .token(args.token) \
+        .post_init(post_init) \
+        .build()
     
-    # Set commands for discovery
-    # await application.bot.set_my_commands([
-    #     BotCommand("start", "Open PrintBot interface"),
-    #     BotCommand("help", "Get assistance")
-    # ])
+    # Add message handler
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
+    )
     
-    # Handle any text messages
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
-    
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == "__main__":
-    main()
+    application.run_polling()

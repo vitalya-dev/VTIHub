@@ -3,6 +3,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 function sendData() {
+    Telegram.WebApp.ready();   
     const phone = document.querySelector('input[type="tel"]').value;
     const description = document.querySelector('textarea').value;
     

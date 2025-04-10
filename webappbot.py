@@ -44,6 +44,7 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Here we use `json.loads`, since the WebApp sends the data JSON serialized string
     # (see webappbot.html)
     data = json.loads(update.effective_message.web_app_data.data)
+    print(data)
     await update.message.reply_html(
         text=(
             f"You selected the color with the HEX value <code>{data['hex']}</code>. The "

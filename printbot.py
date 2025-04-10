@@ -33,6 +33,7 @@ async def post_init(application: Application):
 
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("WebAppData")
     """Handle data from web app"""
     data = json.loads(update.effective_message.web_app_data.data)
     await update.message.reply_text(

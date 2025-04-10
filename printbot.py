@@ -1,5 +1,6 @@
 from telegram import Update, BotCommand, MenuButtonWebApp, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+import json
 
 async def setup_commands(application: Application):
     """Set bot commands menu (shown in /help)"""
@@ -30,6 +31,18 @@ async def post_init(application: Application):
     await setup_commands(application)
     await setup_menu_button(application)
 
+
+async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle data from web app"""
+    data = json.loads(update.message.web_app_data.data)
+    await update.message.reply_text(
+        f"📄 New print job created!\n"
+        f"📞 Phone: {data['phone']}\n"
+        f"📝 Description: {data['description']}"
+    )
+
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -46,5 +59,7 @@ if __name__ == "__main__":
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
     )
+
+    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
     
     application.run_polling()

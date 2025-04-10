@@ -1,5 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+function sendData() {
+    const phone = document.querySelector('input[type="tel"]').value;
+    const description = document.querySelector('textarea').value;
+    
+    Telegram.WebApp.sendData(JSON.stringify({
+        phone: phone,
+        description: description
+    }));
+    Telegram.WebApp.close();
+}
+
+function goBack() {
+    Telegram.WebApp.close();
+}
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -121,8 +138,8 @@
         </div>
 
         <div class="button-group">
-            <button class="back-btn" onclick="">⬅️ Back</button>
-            <button class="print-btn" onclick="">🖨️ Print</button>
+            <button class="back-btn" onclick="goBack()">⬅️ Back</button>
+            <button class="print-btn" onclick="sendData()">🖨️ Print</button>
         </div>
     </div>
 </body>

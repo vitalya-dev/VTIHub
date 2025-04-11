@@ -1,5 +1,5 @@
 from re import DEBUG
-from telegram import Update, BotCommand, MenuButtonWebApp, WebAppInfo, MenuButtonCommands, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, MenuButtonWebApp, WebAppInfo, MenuButtonCommands, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import json
 import logging
@@ -26,15 +26,16 @@ async def setup_menu_button(application: Application):
     )
 
 async def print(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message with a button that opens a the web app."""
+    """Send a message with an inline button that opens the web app."""
+    keyboard = InlineKeyboardMarkup.from_button(
+        InlineKeyboardButton(
+            text="🖨 Open PrintBot Interface",
+            web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
+        )
+    )
     await update.message.reply_text(
-        "Please press the button below to open PrintBot interface.",
-        reply_markup=ReplyKeyboardMarkup.from_button(
-            KeyboardButton(
-                text="Open PrintBot interface",
-                web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
-            )
-        ),
+        "Welcome to PrintBot! Please click the button below to start a new print job:",
+        reply_markup=keyboard
     )
 
 

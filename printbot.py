@@ -1,6 +1,16 @@
+from re import DEBUG
 from telegram import Update, BotCommand, MenuButtonWebApp, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import json
+import logging
+
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+
+logger = logging.getLogger(__name__)
+
 
 async def setup_commands(application: Application):
     """Set bot commands menu (shown in /help)"""
@@ -26,6 +36,10 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "(If you don't see it, update your Telegram app)"
     )
 
+async def default_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fallback for any text messages"""
+    logger.log(level=DEBUG, msg="default_handler is called")
+
 async def post_init(application: Application):
     """Combine all setup tasks"""
     await setup_commands(application)
@@ -33,7 +47,6 @@ async def post_init(application: Application):
 
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("WebAppData")
     """Handle data from web app"""
     data = json.loads(update.effective_message.web_app_data.data)
     await update.message.reply_text(
@@ -57,10 +70,15 @@ if __name__ == "__main__":
         .build()
     
     # Add message handler
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
-    )
+    # application.add_handler(
+    #     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
+    # )
 
-    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+    application.add_handler(MessageHandler(filters.ALL, default_handler))
+
+    #application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+
+
+    #application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
     
     application.run_polling()

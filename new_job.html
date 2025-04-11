@@ -11,10 +11,6 @@ function sendData() {
         phone: phone,
         description: description
     }));
-    Telegram.CallbackQuery.answer(JSON.stringify({
-        phone: phone,
-        description: description
-    }));
     Telegram.WebApp.close();
 }
 

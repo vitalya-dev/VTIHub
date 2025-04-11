@@ -1,5 +1,5 @@
 from re import DEBUG
-from telegram import Update, BotCommand, MenuButtonWebApp, WebAppInfo, MenuButtonCommands
+from telegram import Update, BotCommand, MenuButtonWebApp, WebAppInfo, MenuButtonCommands, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import json
 import logging
@@ -23,6 +23,18 @@ async def setup_menu_button(application: Application):
     """Set persistent web app button"""
     await application.bot.set_chat_menu_button(
         menu_button=MenuButtonCommands()
+    )
+
+async def print(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a message with a button that opens a the web app."""
+    await update.message.reply_text(
+        "Please press the button below to open PrintBot interface.",
+        reply_markup=ReplyKeyboardMarkup.from_button(
+            KeyboardButton(
+                text="Open PrintBot interface",
+                web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
+            )
+        ),
     )
 
 
@@ -67,6 +79,8 @@ if __name__ == "__main__":
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
     )
+
+    application.add_handler(CommandHandler("print", print))
 
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
 

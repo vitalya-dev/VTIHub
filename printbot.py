@@ -26,8 +26,8 @@ from logging import DEBUG, INFO
 # Define URLs for potentially multiple Web Apps
 WEB_APP_URLS = {
     "print": "https://vitalya-dev.github.io/VTIHub/new_job.html", # Your current print app
-    "scan": "https://your-domain.com/path/to/scan_app.html",    # Example: Placeholder for a future scan app
-    "settings": "https://your-domain.com/path/to/settings_app.html", # Example: Placeholder for settings
+    #"scan": "https://your-domain.com/path/to/scan_app.html",    # Example: Placeholder for a future scan app
+    #"settings": "https://your-domain.com/path/to/settings_app.html", # Example: Placeholder for settings
     # Add more key-URL pairs as you create more web apps
 }
 

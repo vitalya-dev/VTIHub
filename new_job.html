@@ -7,6 +7,8 @@ function sendData() {
     const phone = document.querySelector('input[type="tel"]').value;
     const description = document.querySelector('textarea').value;
     
+    console.log(window.Telegram.WebApp.initData)
+
     Telegram.WebApp.sendData(JSON.stringify({
         phone: phone,
         description: description

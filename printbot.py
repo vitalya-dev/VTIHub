@@ -1,101 +1,263 @@
-from re import DEBUG
-from telegram import Update, BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, MenuButtonWebApp, WebAppInfo, MenuButtonCommands, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-import json
 import logging
+import json
+import argparse
 
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+# Import necessary components from python-telegram-bot
+from telegram import (
+    Update,
+    BotCommand,
+    MenuButtonCommands,
+    WebAppInfo,
+    ReplyKeyboardMarkup, # Use ReplyKeyboardMarkup for the main app selection
+    KeyboardButton,      # Buttons within the ReplyKeyboard
+    ReplyKeyboardRemove, # To potentially hide the custom keyboard later
 )
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+# Import logging constants correctly
+from logging import DEBUG, INFO
 
+# --- Configuration ---
+# Define URLs for potentially multiple Web Apps
+WEB_APP_URLS = {
+    "print": "https://vitalya-dev.github.io/VTIHub/new_job.html", # Your current print app
+    "scan": "https://your-domain.com/path/to/scan_app.html",    # Example: Placeholder for a future scan app
+    "settings": "https://your-domain.com/path/to/settings_app.html", # Example: Placeholder for settings
+    # Add more key-URL pairs as you create more web apps
+}
+
+# --- Logging Setup ---
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=INFO
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+# --- Bot Setup Functions ---
 
 async def setup_commands(application: Application):
-    """Set bot commands menu (shown in /help)"""
+    """Set bot commands menu."""
     await application.bot.set_my_commands([
-        BotCommand("show_interface", "Show interface"),
-        BotCommand("help", "Get assistance")
+        BotCommand("start", "Show available actions / apps"),
+        BotCommand("help", "Get assistance and instructions"),
+        BotCommand("hide_menu", "Hide the custom action keyboard") # Command to remove the reply keyboard
     ])
+    logger.info("Bot commands set.")
 
 async def setup_menu_button(application: Application):
-    """Set persistent web app button"""
+    """Set the persistent menu button to show commands."""
     await application.bot.set_chat_menu_button(
         menu_button=MenuButtonCommands()
     )
-
-async def show_interface(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message with an inline button that opens the web app."""
-    keyboard = ReplyKeyboardMarkup.from_button(
-        KeyboardButton(
-            text="🖨 Print",
-            web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
-        )
-    )
-    await update.message.reply_text(
-        "Welcome to PrintBot! Please click the button below to start a new print job:",
-        reply_markup=keyboard
-    )
-
-
-async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fallback for any text messages"""
-    await update.message.reply_text(
-        "⚠️ Just click the '🖨 New Print Job' button below the text field to start!\n"
-        "(If you don't see it, update your Telegram app)"
-    )
-
+    logger.info("Menu button set to show commands.")
 
 async def post_init(application: Application):
-    """Combine all setup tasks"""
+    """Run setup tasks after the application is initialized."""
     await setup_commands(application)
     await setup_menu_button(application)
+    logger.info("Post-initialization setup complete.")
 
+# --- Command Handlers ---
 
-async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle data from web app"""
-    logger.log(DEBUG, "handle_web_app_data")
-    data = json.loads(update.effective_message.web_app_data.data)
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /start command. Displays ReplyKeyboard buttons to launch different Web Apps."""
+    user_name = update.effective_user.first_name
+
+    # Create KeyboardButton objects, one for each web app
+    keyboard_buttons_row1 = []
+    keyboard_buttons_row2 = [] # Example for layout
+    
+    button_count = 0
+    if "print" in WEB_APP_URLS:
+        button = KeyboardButton(
+                     "📄 New Print Job", # Descriptive text
+                     web_app=WebAppInfo(url=WEB_APP_URLS["print"])
+                 )
+        if button_count % 2 == 0: # Simple 2-column layout
+             keyboard_buttons_row1.append(button)
+        else:
+             keyboard_buttons_row2.append(button)
+        button_count += 1
+        
+    if "scan" in WEB_APP_URLS:
+        button = KeyboardButton(
+                    "📷 New Scan Job (Example)",
+                    web_app=WebAppInfo(url=WEB_APP_URLS["scan"])
+                )
+        if button_count % 2 == 0:
+             keyboard_buttons_row1.append(button)
+        else:
+             keyboard_buttons_row2.append(button)
+        button_count += 1
+
+    if "settings" in WEB_APP_URLS:
+        button = KeyboardButton(
+                    "⚙️ Settings (Example)",
+                    web_app=WebAppInfo(url=WEB_APP_URLS["settings"])
+                )
+        if button_count % 2 == 0:
+             keyboard_buttons_row1.append(button)
+        else:
+             keyboard_buttons_row2.append(button)
+        button_count += 1
+        
+    # Combine rows - filter out empty rows if any
+    keyboard_layout = [row for row in [keyboard_buttons_row1, keyboard_buttons_row2] if row]
+
+    if keyboard_layout:
+        # Create the ReplyKeyboardMarkup
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=keyboard_layout,
+            resize_keyboard=True, # Makes the keyboard fit better
+            one_time_keyboard=False, # Keyboard persists until replaced or removed
+            input_field_placeholder="Select an action from the menu below" # Helpful hint
+        )
+        await update.message.reply_text(
+            f"Hello {user_name}! Please choose an action using the buttons below the text field.\n\n"
+            f"Type /hide_menu to remove these buttons and return to the standard keyboard.",
+            reply_markup=keyboard
+        )
+    else:
+        await update.message.reply_text(
+             f"Hello {user_name}! Sorry, no actions are currently configured."
+             # Optionally remove any existing custom keyboard if no actions available
+             # reply_markup=ReplyKeyboardRemove()
+        )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /help command. Provides instructions."""
     await update.message.reply_text(
-        f"📄 New print job created!\n"
-        f"📞 Phone: {data['phone']}\n"
-        f"📝 Description: {data['description']}"
+        "ℹ️ How to use this bot:\n\n"
+        "1. Use the /start command to show buttons for available actions below the text input area.\n"
+        "2. Tap the button for the action you want. This will open the relevant web app.\n"
+        "3. Fill out the details in the web app interface and submit.\n"
+        "4. You'll receive a confirmation message back here in the chat.\n"
+        "5. The action buttons will remain visible. Use /hide_menu to remove them and use the standard keyboard.\n\n",
+        reply_markup=ReplyKeyboardRemove() # Remove keyboard when showing help
     )
 
-    await show_interface(update, context)
+async def hide_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /hide_menu command. Removes the custom ReplyKeyboard."""
+    await update.message.reply_text(
+        "Action menu hidden. Type /start to show it again.",
+        reply_markup=ReplyKeyboardRemove() # This object removes the custom keyboard
+    )
 
-async def log_all_updates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    print(f"--- Full Update Received ---\n{update}\n--------------------------")
-    # You might want to pass the update to the next handler if needed,
-    # depending on your library version and handler group setup.
-    # For simple logging, just printing might be enough for debugging.
+# --- Data Processing Functions ---
+# (These remain the same as the previous multi-app version using InlineKeyboard)
 
+async def process_print_job_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
+    """Processes data specifically from the Print Job Web App."""
+    logger.info(f"Processing 'print_job' data: {data}")
+    try:
+        # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
+        phone = data.get('phone', 'N/A')
+        description = data.get('description', 'No description provided.')
+
+        await update.message.reply_text(
+            f"✅ Print Job Submitted Successfully!\n\n"
+            f"📞 Phone: {phone}\n"
+            f"📝 Description: {description}\n\n"
+            f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."
+        )
+    except KeyError as e:
+        logger.error(f"Missing expected key in print job data: {e}. Data: {data}")
+        await update.message.reply_text(
+            f"⚠️ Missing required information ({e}) for the print job. Please check the app and try again via the menu below or /start."
+        )
+    except Exception as e:
+        logger.exception(f"Error processing print job data: {e}")
+        await update.message.reply_text("⚠️ An error occurred processing the print job details. Please try again via the menu below or /start.")
+
+async def process_scan_job_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
+    """Processes data specifically from the Scan Job Web App (Example)."""
+     # !! Assumes 'app_origin': 'scan_job' is sent back by the web app !!
+    logger.info(f"Processing 'scan_job' data: {data}")
+    await update.message.reply_text(f"✅ Scan Job Data Received (Example):\n\n`{json.dumps(data)}`\n\nUse /start or /hide_menu.", parse_mode='MarkdownV2')
+
+async def process_settings_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
+    """Processes data specifically from the Settings Web App (Example)."""
+    # !! Assumes 'app_origin': 'settings' is sent back by the web app !!
+    logger.info(f"Processing 'settings' data: {data}")
+    await update.message.reply_text(f"✅ Settings Updated (Example):\n\n`{json.dumps(data)}`\n\nUse /start or /hide_menu.", parse_mode='MarkdownV2')
+
+
+# --- Message Handlers ---
+
+async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle data received from any Web App and dispatch to the correct processor."""
+    # This handler remains identical - it doesn't care how the app was launched
+    if not update.effective_message or not update.effective_message.web_app_data:
+        logger.warning("Received update without effective_message or web_app_data")
+        return
+
+    logger.info("Received data from a Web App.")
+    raw_data = update.effective_message.web_app_data.data
+
+    try:
+        data = json.loads(raw_data)
+        logger.log(DEBUG, f"Web App data received: {data}")
+
+        # --- Data Dispatching (Requires 'app_origin' from web app) ---
+        app_origin = data.get('app_origin')
+
+        if app_origin == 'print_job':
+            await process_print_job_data(update, context, data)
+        elif app_origin == 'scan_job':
+             await process_scan_job_data(update, context, data)
+        elif app_origin == 'settings':
+             await process_settings_data(update, context, data)
+        else:
+            logger.warning(f"Received data from unknown or missing app_origin: {app_origin}. Data: {data}")
+            await update.message.reply_text(
+                "Received data, but could not determine its origin or type. Use /start to try again."
+            )
+
+    except json.JSONDecodeError:
+        logger.error(f"Failed to decode JSON data from Web App: {raw_data}")
+        await update.message.reply_text(
+            "⚠️ There was an error processing the data structure from the web app. Please try again via /start."
+        )
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred processing Web App data: {e}")
+        await update.message.reply_text(
+            "⚠️ An unexpected error occurred. Please try again later via /start."
+        )
+
+async def handle_other_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle any other text messages that aren't commands or web app data."""
+    # You might want this handler to be less intrusive if the user is typing
+    # while the custom keyboard is open. For now, it just reminds them.
+    await update.message.reply_text(
+        "👋 Use the buttons below to start an action, or type /start to refresh the menu. Use /hide_menu to type normally, or /help for instructions."
+    )
+
+# --- Main Execution ---
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--token', required=True, help='Telegram bot token')
+    parser = argparse.ArgumentParser(description="Telegram Multi-WebApp Bot (ReplyKeyboard Menu)")
+    parser.add_argument('--token', required=True, help='Telegram Bot Token')
     args = parser.parse_args()
-    
-    # Build application with post_init hook
+
+    logger.info("Starting bot...")
+
     application = Application.builder() \
         .token(args.token) \
         .post_init(post_init) \
         .build()
 
-    #application.add_handler(MessageHandler(filters.ALL, log_all_updates), group=-1)
-    
-    #Add message handler
-    # application.add_handler(
-    #     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
-    # )
-
-    application.add_handler(CommandHandler("show_interface", show_interface))
-
+    # --- Add Handlers ---
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("hide_menu", hide_menu_command)) # Handler for removing the keyboard
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+    # Make sure the text handler doesn't interfere with commands starting with /
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.StatusUpdate.WEB_APP_DATA, handle_other_messages))
 
-
-    #application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-    
-    application.run_polling()
+    logger.info("Bot started and polling for updates...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def setup_commands(application: Application):
     """Set bot commands menu (shown in /help)"""
     await application.bot.set_my_commands([
-        BotCommand("show_print_interface", "Open PrintBot interface"),
+        BotCommand("show_interface", "Show interface"),
         BotCommand("help", "Get assistance")
     ])
 
@@ -25,11 +25,11 @@ async def setup_menu_button(application: Application):
         menu_button=MenuButtonCommands()
     )
 
-async def show_print_interface(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def show_interface(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message with an inline button that opens the web app."""
     keyboard = ReplyKeyboardMarkup.from_button(
         KeyboardButton(
-            text="🖨 Open PrintBot Interface",
+            text="🖨 Print",
             web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
         )
     )
@@ -63,6 +63,8 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📝 Description: {data['description']}"
     )
 
+    await show_interface(update, context)
+
 async def log_all_updates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(f"--- Full Update Received ---\n{update}\n--------------------------")
     # You might want to pass the update to the next handler if needed,
@@ -82,14 +84,14 @@ if __name__ == "__main__":
         .post_init(post_init) \
         .build()
 
-    application.add_handler(MessageHandler(filters.ALL, log_all_updates), group=-1)
+    #application.add_handler(MessageHandler(filters.ALL, log_all_updates), group=-1)
     
     #Add message handler
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
-    )
+    # application.add_handler(
+    #     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages)
+    # )
 
-    application.add_handler(CommandHandler("show_print_interface", show_print_interface))
+    application.add_handler(CommandHandler("show_interface", show_interface))
 
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
 

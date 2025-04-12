@@ -27,8 +27,8 @@ async def setup_menu_button(application: Application):
 
 async def show_print_interface(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message with an inline button that opens the web app."""
-    keyboard = InlineKeyboardMarkup.from_button(
-        InlineKeyboardButton(
+    keyboard = ReplyKeyboardMarkup.from_button(
+        KeyboardButton(
             text="🖨 Open PrintBot Interface",
             web_app=WebAppInfo(url="https://vitalya-dev.github.io/VTIHub/new_job.html")
         )

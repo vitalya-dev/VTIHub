@@ -2,6 +2,8 @@ import logging
 import json
 import argparse
 
+from datetime import datetime
+
 # Import necessary components from python-telegram-bot
 from telegram import (
     Update,
@@ -155,12 +157,28 @@ async def process_print_job_data(update: Update, context: ContextTypes.DEFAULT_T
     """Processes data specifically from the Print Job Web App."""
     logger.info(f"Processing 'print_job' data: {data}")
     try:
+        # --- Get user information ---
+        user = update.effective_user
+        user_identifier = user.first_name # Default to first name
+        if user.username:
+            user_identifier = f"@{user.username}" # Use username if available
+        elif user.full_name:
+             user_identifier = user.full_name # Use full name if no username
+
+        
+        # Get the current time in UTC, formatted as a string
+        current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
         # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
         phone = data.get('phone', 'N/A')
         description = data.get('description', 'No description provided.')
 
+        # Send the confirmation message with user name and time included
         await update.message.reply_text(
             f"✅ Print Job Submitted Successfully!\n\n"
+            f"👤 Submitted by: {user_identifier}\n"
+            f"🕒 Time: {current_time}\n"
+            f"--- Job Details ---\n"
             f"📞 Phone: {phone}\n"
             f"📝 Description: {description}\n\n"
             f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."

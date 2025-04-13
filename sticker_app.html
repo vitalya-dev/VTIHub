@@ -1,34 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script>
-function sendData() {
-    Telegram.WebApp.ready();   
-    const phone = document.querySelector('input[type="tel"]').value;
-    const description = document.querySelector('textarea').value;
-    
-    console.log(window.Telegram.WebApp.initData)
-
-    Telegram.WebApp.sendData(JSON.stringify({
-        phone: phone,
-        description: description,
-        app_origin: 'sticker_app'
-    }));
-    //Telegram.WebApp.close();
-}
-
-function goBack() {
-    Telegram.WebApp.close();
-}
-</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Sticker App - New Sticker</title>
     <style>
+        :root {
+            --primary-color: #2481d7; /* Blue */
+            --secondary-color: #e5e5ea; /* Light gray */
+            --text-color: #1a1a1a;
+            --label-color: #666;
+            --background-color: #f0f2f5;
+            --white: #ffffff;
+            --border-color: #ddd;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: #f0f2f5;
+            background-color: var(--background-color);
             margin: 0;
             padding: 20px;
             display: flex;
@@ -36,7 +25,7 @@ function goBack() {
         }
 
         .sticker-container {
-            background: white;
+            background: var(--white);
             border-radius: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             padding: 20px;
@@ -48,7 +37,7 @@ function goBack() {
             font-size: 20px;
             font-weight: 500;
             margin-bottom: 20px;
-            color: #1a1a1a;
+            color: var(--text-color);
         }
 
         .input-group {
@@ -58,29 +47,24 @@ function goBack() {
         label {
             display: block;
             margin-bottom: 8px;
-            color: #666;
+            color: var(--label-color);
             font-size: 14px;
         }
 
-        input[type="tel"] {
+        input[type="tel"],
+        textarea {
             width: 100%;
             padding: 12px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             font-size: 16px;
             box-sizing: border-box;
+            font-family: inherit;
         }
 
         textarea {
-            width: 100%;
             height: 120px;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
             resize: vertical;
-            box-sizing: border-box;
-            font-family: inherit;
         }
 
         .button-group {
@@ -103,48 +87,119 @@ function goBack() {
             opacity: 0.7;
         }
 
-        .print-btn {
-            background-color: #2481d7;  /* Blue for primary action */
-            color: white;
+        .cancel-btn {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
         }
 
         .send-btn {
-            background-color: #e5e5ea;  /* Light gray for secondary */
-            color: #1a1a1a;
+            background-color: var(--primary-color);
+            color: var(--white);
+        }
+
+        .error-message {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="sticker-container">
-        <div class="header">➕ New Job</div>
+        <div class="header">➕ New Sticker</div>
         
         <div class="input-group">
-            <label>📞 Customer Phone Number</label>
+            <label for="phone">📞 Customer Phone Number</label>
             <input 
                 type="tel" 
-                inputmode="numeric" 
-                pattern="[0-9]*" 
-                placeholder="Enter phone number"
+                id="phone"
+                inputmode="tel" 
+                placeholder="Enter phone number (e.g., +1234567890)"
                 enterkeyhint="next"
+                aria-label="Customer Phone Number"
             >
         </div>
 
         <div class="input-group">
-            <label>💬 Problem Description</label>
+            <label for="description">💬 Problem Description</label>
             <textarea 
+                id="description"
                 placeholder="Describe the problem..."
                 inputmode="text"
                 enterkeyhint="done"
                 autocapitalize="sentences"
                 spellcheck="true"
                 data-gramm="false"
+                aria-label="Problem Description"
             ></textarea>
         </div>
 
         <div class="button-group">
-            <button class="back-btn" onclick="goBack()">⬅️ Back</button>
-            <button class="send-btn" onclick="sendData()">Send</button>
+            <button class="cancel-btn" onclick="goBack()" aria-label="Cancel">Cancel</button>
+            <button class="send-btn" onclick="sendData()" aria-label="Send">Send</button>
         </div>
+
+        <div id="error-message" class="error-message"></div>
     </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        // Validate phone number (allows +, digits, spaces, dashes)
+        function validatePhone(phone) {
+            const phoneRegex = /^[+]?[0-9\s-]*$/;
+            return phone.trim() !== '' && phoneRegex.test(phone);
+        }
+
+        // Validate description (not empty)
+        function validateDescription(description) {
+            return description.trim() !== '';
+        }
+
+        // Send data to Telegram bot
+        function sendData() {
+            const phone = document.getElementById('phone').value;
+            const description = document.getElementById('description').value;
+            const errorMessage = document.getElementById('error-message');
+
+            // Clear previous error
+            errorMessage.textContent = '';
+
+            // Validate inputs
+            if (!validatePhone(phone)) {
+                errorMessage.textContent = 'Please enter a valid phone number.';
+                return;
+            }
+            if (!validateDescription(description)) {
+                errorMessage.textContent = 'Please enter a problem description.';
+                return;
+            }
+
+            // Check Telegram API availability
+            if (typeof Telegram === 'undefined' || !Telegram.WebApp) {
+                errorMessage.textContent = 'Telegram Web App is not available.';
+                return;
+            }
+
+            // Send data
+            Telegram.WebApp.ready();
+            const data = {
+                phone: phone,
+                description: description,
+                app_origin: 'sticker_app'
+            };
+            Telegram.WebApp.sendData(JSON.stringify(data));
+            // Uncomment the line below to close the app after sending
+            Telegram.WebApp.close();
+        }
+
+        // Close the app or fallback
+        function goBack() {
+            if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+                Telegram.WebApp.close();
+            } else {
+                window.history.back(); // Fallback if Telegram API is unavailable
+            }
+        }
+    </script>
 </body>
 </html>

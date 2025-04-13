@@ -27,7 +27,7 @@ from logging import DEBUG, INFO
 # --- Configuration ---
 # Define URLs for potentially multiple Web Apps
 WEB_APP_URLS = {
-    "sticker": "https://vitalya-dev.github.io/VTIHub/sticker_app.html", 
+    "ticket": "https://vitalya-dev.github.io/VTIHub/ticket_app.html", 
 }
 
 # --- Logging Setup ---
@@ -72,10 +72,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     keyboard_buttons_row2 = [] # Example for layout
     
     button_count = 0
-    if "sticker" in WEB_APP_URLS:
+    if "ticket" in WEB_APP_URLS:
         button = KeyboardButton(
-                     "📄 New Sticker", # Descriptive text
-                     web_app=WebAppInfo(url=WEB_APP_URLS["sticker"])
+                     "📄 New Ticket", # Descriptive text
+                     web_app=WebAppInfo(url=WEB_APP_URLS["ticket"])
                  )
         if button_count % 2 == 0: # Simple 2-column layout
              keyboard_buttons_row1.append(button)
@@ -128,9 +128,9 @@ async def hide_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 # --- Data Processing Functions ---
 # (These remain the same as the previous multi-app version using InlineKeyboard)
 
-async def process_sticker_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
+async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
     """Processes data specifically from the Print Job Web App."""
-    logger.info(f"Processing 'sticker_app' data: {data}")
+    logger.info(f"Processing 'ticket_app' data: {data}")
     user = update.effective_user
     user_identifier = user.first_name # Default to first name
     if user.username:
@@ -148,7 +148,7 @@ async def process_sticker_app_data(update: Update, context: ContextTypes.DEFAULT
 
     # Send the confirmation message with user name and time included
     await update.message.reply_text(
-        f"✅ Sticker Create!\n\n"
+        f"✅ Ticket Create!\n\n"
         f"👤 Submitted by: {user_identifier}\n"
         f"🕒 Time: {current_time}\n"
         f"--- Job Details ---\n"
@@ -175,8 +175,8 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         # --- Data Dispatching (Requires 'app_origin' from web app) ---
         app_origin = data.get('app_origin')
 
-        if app_origin == 'sticker_app':
-            await process_sticker_app_data(update, context, data)
+        if app_origin == 'ticket_app':
+            await process_ticket_app_data(update, context, data)
         else:
             logger.warning(f"Received data from unknown or missing app_origin: {app_origin}. Data: {data}")
             await update.message.reply_text(

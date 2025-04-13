@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Sticker App - New Sticker</title>
+    <title>Ticket App - New Ticket</title>
     <style>
         :root {
             --primary-color: #2481d7; /* Blue */
@@ -24,7 +24,7 @@
             justify-content: center;
         }
 
-        .sticker-container {
+        .ticket-container {
             background: var(--white);
             border-radius: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -105,8 +105,8 @@
     </style>
 </head>
 <body>
-    <div class="sticker-container">
-        <div class="header">➕ New Sticker</div>
+    <div class="ticket-container">
+        <div class="header">➕ New Ticket</div>
         
         <div class="input-group">
             <label for="phone">📞 Customer Phone Number</label>
@@ -114,7 +114,7 @@
                 type="tel" 
                 id="phone"
                 inputmode="tel" 
-                placeholder="Enter phone number (e.g., +1234567890)"
+                placeholder="Enter phone number"
                 enterkeyhint="next"
                 aria-label="Customer Phone Number"
             >
@@ -185,7 +185,7 @@
             const data = {
                 phone: phone,
                 description: description,
-                app_origin: 'sticker_app'
+                app_origin: 'ticket_app'
             };
             Telegram.WebApp.sendData(JSON.stringify(data));
             // Uncomment the line below to close the app after sending

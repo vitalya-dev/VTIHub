@@ -14,12 +14,15 @@ from telegram import (
     ReplyKeyboardMarkup, # Use ReplyKeyboardMarkup for the main app selection
     KeyboardButton,      # Buttons within the ReplyKeyboard
     ReplyKeyboardRemove, # To potentially hide the custom keyboard later
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
 )
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
 )
 # Import logging constants correctly
@@ -146,7 +149,11 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
-    
+
+    # Create the "Print" button
+    print_button = InlineKeyboardButton("Print", callback_data=f"print:parse_message")
+    keyboard = InlineKeyboardMarkup([[print_button]])
+
     # Send the confirmation message with user name and time included
     await update.message.reply_text(
         f"✅ Ticket Create!\n\n"
@@ -155,9 +162,17 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
         f"--- Job Details ---\n"
         f"📞 Phone: {phone}\n"
         f"📝 Description: {description}\n\n"
-        f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."
+        f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it.",
+        reply_markup=keyboard
     )
 
+async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    callback_data = query.data
+    message = query.message
+    message_text = message.text # Get the text of the original message
+    logger.info(f"Received callback query {callback_data}. Parsing message {message_text}")
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle data received from any Web App and dispatch to the correct processor."""
@@ -224,6 +239,7 @@ if __name__ == "__main__":
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
     # Make sure the text handler doesn't interfere with commands starting with /
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.StatusUpdate.WEB_APP_DATA, handle_other_messages))
+    application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_message$"))
 
     logger.info("Bot started and polling for updates...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

@@ -12,7 +12,7 @@ function sendData() {
     Telegram.WebApp.sendData(JSON.stringify({
         phone: phone,
         description: description,
-        app_origin: "print_job"
+        app_origin: 'sticker_app'
     }));
     //Telegram.WebApp.close();
 }
@@ -24,7 +24,7 @@ function goBack() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>PrintBot - New Job</title>
+    <title>Sticker App - New Sticker</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -35,7 +35,7 @@ function goBack() {
             justify-content: center;
         }
 
-        .job-container {
+        .sticker-container {
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -108,14 +108,14 @@ function goBack() {
             color: white;
         }
 
-        .back-btn {
+        .send-btn {
             background-color: #e5e5ea;  /* Light gray for secondary */
             color: #1a1a1a;
         }
     </style>
 </head>
 <body>
-    <div class="job-container">
+    <div class="sticker-container">
         <div class="header">➕ New Job</div>
         
         <div class="input-group">
@@ -143,7 +143,7 @@ function goBack() {
 
         <div class="button-group">
             <button class="back-btn" onclick="goBack()">⬅️ Back</button>
-            <button class="print-btn" onclick="sendData()">🖨️ Print</button>
+            <button class="send-btn" onclick="sendData()">Send</button>
         </div>
     </div>
 </body>

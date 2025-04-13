@@ -27,10 +27,7 @@ from logging import DEBUG, INFO
 # --- Configuration ---
 # Define URLs for potentially multiple Web Apps
 WEB_APP_URLS = {
-    "print": "https://vitalya-dev.github.io/VTIHub/new_job.html", # Your current print app
-    #"scan": "https://your-domain.com/path/to/scan_app.html",    # Example: Placeholder for a future scan app
-    #"settings": "https://your-domain.com/path/to/settings_app.html", # Example: Placeholder for settings
-    # Add more key-URL pairs as you create more web apps
+    "sticker": "https://vitalya-dev.github.io/VTIHub/sticker_app.html", 
 }
 
 # --- Logging Setup ---
@@ -45,7 +42,7 @@ logger = logging.getLogger(__name__)
 async def setup_commands(application: Application):
     """Set bot commands menu."""
     await application.bot.set_my_commands([
-        BotCommand("start", "Show available actions / apps"),
+        BotCommand("start", "Show available apps"),
         BotCommand("help", "Get assistance and instructions"),
         BotCommand("hide_menu", "Hide the custom action keyboard") # Command to remove the reply keyboard
     ])
@@ -75,34 +72,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     keyboard_buttons_row2 = [] # Example for layout
     
     button_count = 0
-    if "print" in WEB_APP_URLS:
+    if "sticker" in WEB_APP_URLS:
         button = KeyboardButton(
-                     "📄 New Print Job", # Descriptive text
-                     web_app=WebAppInfo(url=WEB_APP_URLS["print"])
+                     "📄 New Sticker", # Descriptive text
+                     web_app=WebAppInfo(url=WEB_APP_URLS["sticker"])
                  )
         if button_count % 2 == 0: # Simple 2-column layout
-             keyboard_buttons_row1.append(button)
-        else:
-             keyboard_buttons_row2.append(button)
-        button_count += 1
-        
-    if "scan" in WEB_APP_URLS:
-        button = KeyboardButton(
-                    "📷 New Scan Job (Example)",
-                    web_app=WebAppInfo(url=WEB_APP_URLS["scan"])
-                )
-        if button_count % 2 == 0:
-             keyboard_buttons_row1.append(button)
-        else:
-             keyboard_buttons_row2.append(button)
-        button_count += 1
-
-    if "settings" in WEB_APP_URLS:
-        button = KeyboardButton(
-                    "⚙️ Settings (Example)",
-                    web_app=WebAppInfo(url=WEB_APP_URLS["settings"])
-                )
-        if button_count % 2 == 0:
              keyboard_buttons_row1.append(button)
         else:
              keyboard_buttons_row2.append(button)
@@ -153,59 +128,35 @@ async def hide_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 # --- Data Processing Functions ---
 # (These remain the same as the previous multi-app version using InlineKeyboard)
 
-async def process_print_job_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
+async def process_sticker_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
     """Processes data specifically from the Print Job Web App."""
-    logger.info(f"Processing 'print_job' data: {data}")
-    try:
-        # --- Get user information ---
-        user = update.effective_user
-        user_identifier = user.first_name # Default to first name
-        if user.username:
-            user_identifier = f"@{user.username}" # Use username if available
-        elif user.full_name:
-             user_identifier = user.full_name # Use full name if no username
+    logger.info(f"Processing 'sticker_app' data: {data}")
+    user = update.effective_user
+    user_identifier = user.first_name # Default to first name
+    if user.username:
+        user_identifier = f"@{user.username}" # Use username if available
+    elif user.full_name:
+         user_identifier = user.full_name # Use full name if no username
 
-        
-        # Get the current time in UTC, formatted as a string
-        current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    
+    # Get the current time in UTC, formatted as a string
+    current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
-        phone = data.get('phone', 'N/A')
-        description = data.get('description', 'No description provided.')
+    # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
+    phone = data.get('phone', 'N/A')
+    description = data.get('description', 'No description provided.')
 
-        # Send the confirmation message with user name and time included
-        await update.message.reply_text(
-            f"✅ Print Job Submitted Successfully!\n\n"
-            f"👤 Submitted by: {user_identifier}\n"
-            f"🕒 Time: {current_time}\n"
-            f"--- Job Details ---\n"
-            f"📞 Phone: {phone}\n"
-            f"📝 Description: {description}\n\n"
-            f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."
-        )
-    except KeyError as e:
-        logger.error(f"Missing expected key in print job data: {e}. Data: {data}")
-        await update.message.reply_text(
-            f"⚠️ Missing required information ({e}) for the print job. Please check the app and try again via the menu below or /start."
-        )
-    except Exception as e:
-        logger.exception(f"Error processing print job data: {e}")
-        await update.message.reply_text("⚠️ An error occurred processing the print job details. Please try again via the menu below or /start.")
+    # Send the confirmation message with user name and time included
+    await update.message.reply_text(
+        f"✅ Sticker Create!\n\n"
+        f"👤 Submitted by: {user_identifier}\n"
+        f"🕒 Time: {current_time}\n"
+        f"--- Job Details ---\n"
+        f"📞 Phone: {phone}\n"
+        f"📝 Description: {description}\n\n"
+        f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."
+    )
 
-async def process_scan_job_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
-    """Processes data specifically from the Scan Job Web App (Example)."""
-     # !! Assumes 'app_origin': 'scan_job' is sent back by the web app !!
-    logger.info(f"Processing 'scan_job' data: {data}")
-    await update.message.reply_text(f"✅ Scan Job Data Received (Example):\n\n`{json.dumps(data)}`\n\nUse /start or /hide_menu.", parse_mode='MarkdownV2')
-
-async def process_settings_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
-    """Processes data specifically from the Settings Web App (Example)."""
-    # !! Assumes 'app_origin': 'settings' is sent back by the web app !!
-    logger.info(f"Processing 'settings' data: {data}")
-    await update.message.reply_text(f"✅ Settings Updated (Example):\n\n`{json.dumps(data)}`\n\nUse /start or /hide_menu.", parse_mode='MarkdownV2')
-
-
-# --- Message Handlers ---
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle data received from any Web App and dispatch to the correct processor."""
@@ -224,12 +175,8 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         # --- Data Dispatching (Requires 'app_origin' from web app) ---
         app_origin = data.get('app_origin')
 
-        if app_origin == 'print_job':
-            await process_print_job_data(update, context, data)
-        elif app_origin == 'scan_job':
-             await process_scan_job_data(update, context, data)
-        elif app_origin == 'settings':
-             await process_settings_data(update, context, data)
+        if app_origin == 'sticker_app':
+            await process_sticker_app_data(update, context, data)
         else:
             logger.warning(f"Received data from unknown or missing app_origin: {app_origin}. Data: {data}")
             await update.message.reply_text(

@@ -1,6 +1,7 @@
 import logging
 import json
 import argparse
+import pytz
 
 from datetime import datetime
 
@@ -140,12 +141,12 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 
     
     # Get the current time in UTC, formatted as a string
-    current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    current_time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%Y-%m-%d %H:%M:%S %Z")
 
     # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
-
+    
     # Send the confirmation message with user name and time included
     await update.message.reply_text(
         f"✅ Ticket Create!\n\n"

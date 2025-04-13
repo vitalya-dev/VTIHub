@@ -2,6 +2,8 @@ import logging
 import json
 import argparse
 import pytz
+import base64
+import re
 
 from datetime import datetime
 
@@ -150,29 +152,112 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
 
-    # Create the "Print" button
-    print_button = InlineKeyboardButton("Print", callback_data=f"print:parse_message")
-    keyboard = InlineKeyboardMarkup([[print_button]])
+    ticket_details_to_encode = {
+        # Only include data absolutely needed by the print callback
+        'p': phone,
+        'd': description,
+        's': user_identifier, # Example: submitter initial ('s')
+        't': current_time     # Example: time ('t')
+    }
 
-    # Send the confirmation message with user name and time included
-    await update.message.reply_text(
-        f"✅ Ticket Create!\n\n"
+    # 2. Encode the dictionary
+    try:
+        # Encode to JSON string
+        json_string = json.dumps(ticket_details_to_encode, separators=(',', ':')) # Compact JSON
+
+        # Optional: Encode JSON string to Base64 for cleaner embedding & slight obfuscation
+        base64_encoded_json = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
+        encoded_data_string = base64_encoded_json # Use Base64 version   
+
+    except Exception as e:
+        logger.error(f"Failed to encode ticket details: {e}", exc_info=True)
+        await update.message.reply_text("Sorry, there was an error preparing your ticket data.")
+        return
+
+    # 3. Define the marker for easy finding
+    data_marker = "Encoded Data:"
+
+    # 4. Construct the message text including the encoded data
+    message_text = (
+        f"✅ Ticket Created!\n\n"
         f"👤 Submitted by: {user_identifier}\n"
         f"🕒 Time: {current_time}\n"
         f"--- Job Details ---\n"
         f"📞 Phone: {phone}\n"
         f"📝 Description: {description}\n\n"
-        f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it.",
-        reply_markup=keyboard
+        # --- Embed the encoded data ---
+        f"{data_marker} {encoded_data_string}\n\n"
+        # -----------------------------
+        f"Click 'Print' below to process further.\n"
+        f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."
     )
 
+    # 5. Create the button (callback_data can be simple now)
+    print_button = InlineKeyboardButton(
+        "Print",
+        callback_data="print:parse_encoded" # Simple callback data, logic is in parsing
+    )
+    keyboard = InlineKeyboardMarkup([[print_button]])
+
+    # 6. Send the message
+    try:
+        await update.message.reply_text(
+            text=message_text,
+            reply_markup=keyboard,
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        logger.error(f"Error sending confirmation message: {e}", exc_info=True)
+        # Attempt to notify user of failure
+        await update.message.reply_text("Sorry, failed to send the ticket confirmation message.")
+
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the 'Print' button callback by parsing encoded data from the message text."""
     query = update.callback_query
-    await query.answer()
-    callback_data = query.data
+    await query.answer("Processing print request...")
+
+    callback_data = query.data # Should be "print:parse_encoded"
     message = query.message
-    message_text = message.text # Get the text of the original message
-    logger.info(f"Received callback query {callback_data}. Parsing message {message_text}")
+    message_text = message.text # Get the full text of the message #pyright: ignore
+
+    logger.info(f"Received callback query '{callback_data}'. Parsing encoded data from message ID {message.message_id}")
+
+    # --- Parse the message text to find and decode the embedded data ---
+    ticket_data = None
+    data_marker = "Encoded Data:" # Must match the marker used in process_ticket_app_data
+
+    try:
+        # Use regex to find the marker and capture the data string after it
+        # `re.escape` handles potential special characters in the marker itself
+        # `(.*)` captures the rest of the line after the marker (non-greedy `.*?` might be safer if marker could appear again)
+        match = re.search(f"^{re.escape(data_marker)}\\s+(.*)$", message_text, re.MULTILINE)
+
+        if match:
+            encoded_data_string = match.group(1).strip()
+            logger.debug(f"Found encoded data string: {encoded_data_string}")
+
+            json_string_bytes = base64.b64decode(encoded_data_string)
+            json_string = json_string_bytes.decode('utf-8')
+
+            # Parse the JSON string
+            ticket_data = json.loads(json_string)
+            logger.info(f"Successfully parsed embedded data: {ticket_data}")
+
+        else:
+            logger.warning(f"Could not find marker '{data_marker}' in message text.")
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to decode JSON from embedded data: {e}", exc_info=True)
+        ticket_data = None # Ensure data is None on failure
+    except Exception as e:
+        logger.error(f"Error parsing encoded data from message: {e}", exc_info=True)
+        ticket_data = None
+
+    # --- Now use the extracted data (if found) ---
+    if ticket_data:
+        pass
+
+
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle data received from any Web App and dispatch to the correct processor."""
@@ -239,7 +324,7 @@ if __name__ == "__main__":
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
     # Make sure the text handler doesn't interfere with commands starting with /
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.StatusUpdate.WEB_APP_DATA, handle_other_messages))
-    application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_message$"))
+    application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_encoded$"))
 
     logger.info("Bot started and polling for updates...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

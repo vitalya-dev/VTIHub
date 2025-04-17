@@ -152,6 +152,24 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
 
+    # --- Generate Search Hints ---
+    search_hints = ""
+    if phone and phone != 'N/A':
+        # Remove all non-digit characters from the phone number
+        numeric_phone = re.sub(r'\D', '', phone)
+        phone_len = len(numeric_phone)
+        hints_list = []
+        if phone_len >= 2:
+            hints_list.append(numeric_phone[-2:])
+        if phone_len >= 3:
+            hints_list.append(numeric_phone[-3:])
+        if phone_len >= 4:
+            hints_list.append(numeric_phone[-4:])
+
+        # Join the hints with spaces, ensuring uniqueness if lengths overlap (e.g., 2-digit number)
+        search_hints = " ".join(sorted(list(set(hints_list)), key=len)) # Sort by length for readability
+    # --- End Search Hints Generation ---
+
     ticket_details_to_encode = {
         # Only include data absolutely needed by the print callback
         'p': phone,
@@ -183,7 +201,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
         f"👤 Submitted by: {user_identifier}\n"
         f"🕒 Time: {current_time}\n"
         f"--- Job Details ---\n"
-        f"📞 Phone: {phone}\n"
+        f"📞 Phone: {phone} (Search: {search_hints})\n"
         f"📝 Description: {description}\n\n"
         # --- Embed the encoded data ---
         f"{data_marker} {encoded_data_string}\n\n"

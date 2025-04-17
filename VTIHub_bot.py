@@ -266,21 +266,35 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
         return # Exit the function here if user message failed
 
     # 7. If sending to user was successful, ALSO send the EXACT SAME message to the TARGET CHANNEL
+    # After sending the message to the channel
     if message_sent_to_user and TARGET_CHANNEL_ID:
         try:
-            await context.bot.send_message(
+            sent_message = await context.bot.send_message(
                 chat_id=TARGET_CHANNEL_ID,
-                text=message_text,          # Use the EXACT same message text
-                reply_markup=keyboard,      # Use the EXACT same keyboard
+                text=message_text,
+                reply_markup=keyboard,
                 disable_web_page_preview=True
             )
             logger.info(f"Ticket message successfully forwarded to channel {TARGET_CHANNEL_ID}")
+
+            # --- Build a link to the channel message ---
+            # If your channel is private (no username), you need to construct the link manually
+
+            # Remove the '-100' prefix for the t.me/c link
+            internal_channel_id = str(TARGET_CHANNEL_ID)[4:]
+            channel_message_id = sent_message.message_id
+
+            message_link = f"https://t.me/c/{internal_channel_id}/{channel_message_id}"
+
+            # Now send this link back to the user
+            await update.message.reply_text(
+                f"🔗 Your ticket was also posted in the ticket channel!\n"
+                f"Click here to view it: [View Ticket]({message_link})",
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
         except Exception as e_channel:
             logger.error(f"Failed to send message TO CHANNEL {TARGET_CHANNEL_ID}: {e_channel}", exc_info=True)
-            # Optional: Decide if you need to inform the user about the channel forwarding failure.
-            # Usually, just logging the error for the admin/developer is sufficient.
-    elif not TARGET_CHANNEL_ID:
-         logger.warning("TARGET_CHANNEL_ID is not set in the configuration. Cannot forward message.")
 
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

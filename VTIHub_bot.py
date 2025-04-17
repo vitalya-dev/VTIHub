@@ -166,135 +166,125 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     """Processes data specifically from the Ticket Web App."""
     logger.info(f"Processing 'ticket_app' data: {data}")
     user = update.effective_user
-    user_identifier = user.first_name # Default to first name
+    user_identifier = user.first_name
     if user.username:
-        user_identifier = f"@{user.username}" # Use username if available
+        user_identifier = f"@{user.username}"
     elif user.full_name:
-         user_identifier = user.full_name # Use full name if no username
+        user_identifier = user.full_name
 
-
-    # Get the current time in the specified timezone
+    # Get current time
     try:
-        tz = pytz.timezone('Europe/Moscow') # Define your timezone
+        tz = pytz.timezone('Europe/Moscow')
         current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
     except pytz.UnknownTimeZoneError:
         logger.warning("Unknown timezone 'Europe/Moscow', falling back to UTC.")
         current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-
-    # Extract data from the web app payload
+    # Extract web app data
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
 
-    # --- Generate Search Hints ---
+    # Generate search hints
     search_hints = ""
     if phone and phone != 'N/A':
         numeric_phone = re.sub(r'\D', '', phone)
-        phone_len = len(numeric_phone)
         hints_list = []
-        if phone_len >= 2: hints_list.append(numeric_phone[-2:])
-        if phone_len >= 3: hints_list.append(numeric_phone[-3:])
-        if phone_len >= 4: hints_list.append(numeric_phone[-4:])
-        search_hints = " ".join(sorted(list(set(hints_list)), key=len))
-    # --- End Search Hints Generation ---
+        if len(numeric_phone) >= 2: hints_list.append(numeric_phone[-2:])
+        if len(numeric_phone) >= 3: hints_list.append(numeric_phone[-3:])
+        if len(numeric_phone) >= 4: hints_list.append(numeric_phone[-4:])
+        search_hints = " ".join(sorted(set(hints_list), key=len))
 
-    # 1. Prepare data for encoding (only what's needed for the callback)
+    # Prepare ticket data for encoding
     ticket_details_to_encode = {
         'p': phone,
         'd': description,
-        's': user_identifier, # Submitter identifier
-        't': current_time     # Time of submission
+        's': user_identifier,
+        't': current_time
     }
 
-    # 2. Encode the dictionary to Base64 JSON
-    encoded_data_string = None
+    # Encode the ticket data
     try:
-        json_string = json.dumps(ticket_details_to_encode, separators=(',', ':')) # Compact JSON
+        json_string = json.dumps(ticket_details_to_encode, separators=(',', ':'))
         base64_encoded_json = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
-        encoded_data_string = base64_encoded_json
-
     except Exception as e:
         logger.error(f"Failed to encode ticket details: {e}", exc_info=True)
         await update.message.reply_text("Sorry, there was an error preparing your ticket data.")
-        return # Stop processing if encoding fails
+        return
 
-    # 3. Define the marker for easy finding
     data_marker = "Encoded Data:"
 
-    # 4. Construct the **SINGLE** message text including the encoded data
-    #    This text will be used for both user and channel messages.
-    message_text = (
-        f"✅ Ticket Created!\n\n"
-        f"👤 Submitted by: {user_identifier} (User ID: {user.id})\n" # Included User ID for clarity in both contexts
-        f"🕒 Time: {current_time}\n"
-        f"--- Job Details ---\n"
-        f"📞 Phone: {phone} (Search: {search_hints})\n"
-        f"📝 Description: {description}\n\n"
-        # --- Embed the encoded data ---
-        f"{data_marker} {encoded_data_string}\n\n"
-        # -----------------------------
-        f"Click 'Print' below to process further." # Generic instruction suitable for both
-    )
-
-    # 5. Create the Inline Keyboard Button
+    # Inline "Print" button (still needed)
     print_button = InlineKeyboardButton(
-        "🖨️ Print", # Added emoji for visual cue
-        callback_data="print:parse_encoded" # Callback identifier
+        "🖨️ Print",
+        callback_data="print:parse_encoded"
     )
     keyboard = InlineKeyboardMarkup([[print_button]])
 
-    # --- Sending Logic ---
-    message_sent_to_user = False
-
-    # 6. Send the message to the USER first
-    try:
-        await update.message.reply_text(
-            text=message_text,          # Use the single message text
-            reply_markup=keyboard,      # Use the single keyboard
-            disable_web_page_preview=True
-        )
-        logger.info(f"Confirmation message sent to user {user_identifier} ({user.id})")
-        message_sent_to_user = True # Mark as successful
-
-    except Exception as e_user:
-        logger.error(f"Error sending confirmation message TO USER {user_identifier} ({user.id}): {e_user}", exc_info=True)
-        # Attempt to notify user of failure ONLY if sending to them failed
+    # --- STEP 1: Send the message to the Channel first ---
+    if TARGET_CHANNEL_ID:
         try:
-            await update.message.reply_text("Sorry, failed to send your ticket confirmation message.")
-        except Exception as e_notify:
-             logger.error(f"Failed even to notify user {user_identifier} ({user.id}) about the error: {e_notify}")
-        return # Exit the function here if user message failed
+            channel_message_text = (
+                f"✅ Ticket Created!\n\n"
+                f"👤 Submitted by: {user_identifier} (User ID: {user.id})\n"
+                f"🕒 Time: {current_time}\n"
+                f"--- Job Details ---\n"
+                f"📞 Phone: {phone} (Search: {search_hints})\n"
+                f"📝 Description: {description}\n\n"
+                f"{data_marker} {base64_encoded_json}\n\n"
+                f"Click 'Print' below to process further."
+            )
 
-    # 7. If sending to user was successful, ALSO send the EXACT SAME message to the TARGET CHANNEL
-    # After sending the message to the channel
-    if message_sent_to_user and TARGET_CHANNEL_ID:
-        try:
             sent_message = await context.bot.send_message(
                 chat_id=TARGET_CHANNEL_ID,
-                text=message_text,
+                text=channel_message_text,
                 reply_markup=keyboard,
                 disable_web_page_preview=True
             )
-            logger.info(f"Ticket message successfully forwarded to channel {TARGET_CHANNEL_ID}")
+            logger.info(f"Ticket posted to channel {TARGET_CHANNEL_ID}")
 
-            # --- Build a link to the channel message ---
-            # If your channel is private (no username), you need to construct the link manually
-
-            # Remove the '-100' prefix for the t.me/c link
-            internal_channel_id = str(TARGET_CHANNEL_ID)[4:]
+            # Build link to the channel message
+            internal_channel_id = str(TARGET_CHANNEL_ID)[4:]  # remove "-100"
             channel_message_id = sent_message.message_id
-
             message_link = f"https://t.me/c/{internal_channel_id}/{channel_message_id}"
 
-            # Now send this link back to the user
-            await update.message.reply_text(
-                f"🔗 Your ticket was also posted in the ticket channel!\n"
-                f"Click here to view it: [View Ticket]({message_link})",
-                parse_mode="Markdown",
-                disable_web_page_preview=True
-            )
         except Exception as e_channel:
             logger.error(f"Failed to send message TO CHANNEL {TARGET_CHANNEL_ID}: {e_channel}", exc_info=True)
+            await update.message.reply_text("Sorry, there was an error posting your ticket to the channel.")
+            return
+
+    else:
+        logger.warning("TARGET_CHANNEL_ID is not set.")
+        await update.message.reply_text("Ticket channel is not configured.")
+        return
+
+    # --- STEP 2: After posting to channel, send user a full message ---
+    try:
+        user_message_text = (
+            f"✅ Ticket Created!\n\n"
+            f"👤 Submitted by: {user_identifier} (User ID: {user.id})\n"
+            f"🕒 Time: {current_time}\n"
+            f"--- Job Details ---\n"
+            f"📞 Phone: {phone} (Search: {search_hints})\n"
+            f"📝 Description: {description}\n\n"
+            f"{data_marker} {base64_encoded_json}\n\n"
+            f"🔗 [View Your Ticket in Channel]({message_link})\n\n"
+            f"Click 'Print' below to process further."
+        )
+
+        await update.message.reply_text(
+            text=user_message_text,
+            reply_markup=keyboard,
+            disable_web_page_preview=True
+        )
+        logger.info(f"Confirmation message sent to user {user_identifier} ({user.id})")
+
+    except Exception as e_user:
+        logger.error(f"Error sending confirmation to user {user_identifier} ({user.id}): {e_user}", exc_info=True)
+        try:
+            await update.message.reply_text("Sorry, failed to send your ticket confirmation message.")
+        except Exception as e_notify:
+            logger.error(f"Failed even to notify user {user_identifier} ({user.id}): {e_notify}")
+
 
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

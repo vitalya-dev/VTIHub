@@ -51,7 +51,6 @@ async def setup_commands(application: Application):
     """Set bot commands menu."""
     await application.bot.set_my_commands([
         BotCommand("start", "Show available apps"),
-        BotCommand("channel", "Open the ticket channel"),     # New command
         BotCommand("help", "Get assistance and instructions"),
         BotCommand("hide_menu", "Hide the custom action keyboard") # Command to remove the reply keyboard
     ])
@@ -83,15 +82,14 @@ async def channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         # Extract the internal numeric ID (remove -100 prefix)
         # Ensure TARGET_CHANNEL_ID is treated as a string for slicing
-        channel_internal_id = str(TARGET_CHANNEL_ID)[4:]
         channel_url = f"https://t.me/c/2558046400/7" # Link format for private channels (for members)
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➡️ Open Ticket Channel", url=channel_url)]
+            [InlineKeyboardButton("➡️ Open VTIHub Channel", url=channel_url)]
         ])
 
         await update.message.reply_text(
-            "Click the button below to open the ticket channel (requires membership):",
+            "Click the button below to open the VTIHub channel (requires membership):",
             reply_markup=keyboard
         )
         logger.info(f"Provided channel link to user {update.effective_user.id}")

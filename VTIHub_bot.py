@@ -36,6 +36,8 @@ WEB_APP_URLS = {
     "ticket": "https://vitalya-dev.github.io/VTIHub/ticket_app.html", 
 }
 
+TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
+
 # --- Logging Setup ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=INFO
@@ -88,7 +90,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         else:
              keyboard_buttons_row2.append(button)
         button_count += 1
-        
     # Combine rows - filter out empty rows if any
     keyboard_layout = [row for row in [keyboard_buttons_row1, keyboard_buttons_row2] if row]
 
@@ -135,7 +136,7 @@ async def hide_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 # (These remain the same as the previous multi-app version using InlineKeyboard)
 
 async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
-    """Processes data specifically from the Print Job Web App."""
+    """Processes data specifically from the Ticket Web App."""
     logger.info(f"Processing 'ticket_app' data: {data}")
     user = update.effective_user
     user_identifier = user.first_name # Default to first name
@@ -144,61 +145,60 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     elif user.full_name:
          user_identifier = user.full_name # Use full name if no username
 
-    
-    # Get the current time in UTC, formatted as a string
-    current_time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-    # !! Assumes 'app_origin': 'print_job' is sent back by the web app !!
+    # Get the current time in the specified timezone
+    try:
+        tz = pytz.timezone('Europe/Moscow') # Define your timezone
+        current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+    except pytz.UnknownTimeZoneError:
+        logger.warning("Unknown timezone 'Europe/Moscow', falling back to UTC.")
+        current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+    # Extract data from the web app payload
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
 
     # --- Generate Search Hints ---
     search_hints = ""
     if phone and phone != 'N/A':
-        # Remove all non-digit characters from the phone number
         numeric_phone = re.sub(r'\D', '', phone)
         phone_len = len(numeric_phone)
         hints_list = []
-        if phone_len >= 2:
-            hints_list.append(numeric_phone[-2:])
-        if phone_len >= 3:
-            hints_list.append(numeric_phone[-3:])
-        if phone_len >= 4:
-            hints_list.append(numeric_phone[-4:])
-
-        # Join the hints with spaces, ensuring uniqueness if lengths overlap (e.g., 2-digit number)
-        search_hints = " ".join(sorted(list(set(hints_list)), key=len)) # Sort by length for readability
+        if phone_len >= 2: hints_list.append(numeric_phone[-2:])
+        if phone_len >= 3: hints_list.append(numeric_phone[-3:])
+        if phone_len >= 4: hints_list.append(numeric_phone[-4:])
+        search_hints = " ".join(sorted(list(set(hints_list)), key=len))
     # --- End Search Hints Generation ---
 
+    # 1. Prepare data for encoding (only what's needed for the callback)
     ticket_details_to_encode = {
-        # Only include data absolutely needed by the print callback
         'p': phone,
         'd': description,
-        's': user_identifier, # Example: submitter initial ('s')
-        't': current_time     # Example: time ('t')
+        's': user_identifier, # Submitter identifier
+        't': current_time     # Time of submission
     }
 
-    # 2. Encode the dictionary
+    # 2. Encode the dictionary to Base64 JSON
+    encoded_data_string = None
     try:
-        # Encode to JSON string
         json_string = json.dumps(ticket_details_to_encode, separators=(',', ':')) # Compact JSON
-
-        # Optional: Encode JSON string to Base64 for cleaner embedding & slight obfuscation
         base64_encoded_json = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
-        encoded_data_string = base64_encoded_json # Use Base64 version   
+        encoded_data_string = base64_encoded_json
 
     except Exception as e:
         logger.error(f"Failed to encode ticket details: {e}", exc_info=True)
         await update.message.reply_text("Sorry, there was an error preparing your ticket data.")
-        return
+        return # Stop processing if encoding fails
 
     # 3. Define the marker for easy finding
     data_marker = "Encoded Data:"
 
-    # 4. Construct the message text including the encoded data
+    # 4. Construct the **SINGLE** message text including the encoded data
+    #    This text will be used for both user and channel messages.
     message_text = (
         f"✅ Ticket Created!\n\n"
-        f"👤 Submitted by: {user_identifier}\n"
+        f"👤 Submitted by: {user_identifier} (User ID: {user.id})\n" # Included User ID for clarity in both contexts
         f"🕒 Time: {current_time}\n"
         f"--- Job Details ---\n"
         f"📞 Phone: {phone} (Search: {search_hints})\n"
@@ -206,28 +206,55 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
         # --- Embed the encoded data ---
         f"{data_marker} {encoded_data_string}\n\n"
         # -----------------------------
-        f"Click 'Print' below to process further.\n"
-        f"The action menu is still active below. Use /start to refresh or /hide_menu to remove it."
+        f"Click 'Print' below to process further." # Generic instruction suitable for both
     )
 
-    # 5. Create the button (callback_data can be simple now)
+    # 5. Create the Inline Keyboard Button
     print_button = InlineKeyboardButton(
-        "Print",
-        callback_data="print:parse_encoded" # Simple callback data, logic is in parsing
+        "🖨️ Print", # Added emoji for visual cue
+        callback_data="print:parse_encoded" # Callback identifier
     )
     keyboard = InlineKeyboardMarkup([[print_button]])
 
-    # 6. Send the message
+    # --- Sending Logic ---
+    message_sent_to_user = False
+
+    # 6. Send the message to the USER first
     try:
         await update.message.reply_text(
-            text=message_text,
-            reply_markup=keyboard,
+            text=message_text,          # Use the single message text
+            reply_markup=keyboard,      # Use the single keyboard
             disable_web_page_preview=True
         )
-    except Exception as e:
-        logger.error(f"Error sending confirmation message: {e}", exc_info=True)
-        # Attempt to notify user of failure
-        await update.message.reply_text("Sorry, failed to send the ticket confirmation message.")
+        logger.info(f"Confirmation message sent to user {user_identifier} ({user.id})")
+        message_sent_to_user = True # Mark as successful
+
+    except Exception as e_user:
+        logger.error(f"Error sending confirmation message TO USER {user_identifier} ({user.id}): {e_user}", exc_info=True)
+        # Attempt to notify user of failure ONLY if sending to them failed
+        try:
+            await update.message.reply_text("Sorry, failed to send your ticket confirmation message.")
+        except Exception as e_notify:
+             logger.error(f"Failed even to notify user {user_identifier} ({user.id}) about the error: {e_notify}")
+        return # Exit the function here if user message failed
+
+    # 7. If sending to user was successful, ALSO send the EXACT SAME message to the TARGET CHANNEL
+    if message_sent_to_user and TARGET_CHANNEL_ID:
+        try:
+            await context.bot.send_message(
+                chat_id=TARGET_CHANNEL_ID,
+                text=message_text,          # Use the EXACT same message text
+                reply_markup=keyboard,      # Use the EXACT same keyboard
+                disable_web_page_preview=True
+            )
+            logger.info(f"Ticket message successfully forwarded to channel {TARGET_CHANNEL_ID}")
+        except Exception as e_channel:
+            logger.error(f"Failed to send message TO CHANNEL {TARGET_CHANNEL_ID}: {e_channel}", exc_info=True)
+            # Optional: Decide if you need to inform the user about the channel forwarding failure.
+            # Usually, just logging the error for the admin/developer is sufficient.
+    elif not TARGET_CHANNEL_ID:
+         logger.warning("TARGET_CHANNEL_ID is not set in the configuration. Cannot forward message.")
+
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the 'Print' button callback by parsing encoded data from the message text."""

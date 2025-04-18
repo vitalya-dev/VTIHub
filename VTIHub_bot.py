@@ -231,7 +231,6 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
                 f"📞 Phone: {phone} (Search: {search_hints})\n"
                 f"📝 Description: {description}\n\n"
                 f"{data_marker} {base64_encoded_json}\n\n"
-                f"Click 'Print' below to process further."
             )
 
             sent_message = await context.bot.send_message(
@@ -268,7 +267,6 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
             f"📝 Description: {description}\n\n"
             f"{data_marker} {base64_encoded_json}\n\n"
             f"🔗 [View Your Ticket in Channel]({message_link})\n\n"
-            f"Click 'Print' below to process further."
         )
 
         await update.message.reply_text(

@@ -290,88 +290,94 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the 'Print' button: parses data, renders PNG label, and sends it."""
+    """
+    Handles the 'Print' button:
+      1. Parses the base64‑encoded ticket data.
+      2. Renders a 58×40 mm PNG label at 203 dpi using Roboto TTFs.
+      3. Sends the label image back into the chat.
+    """
     query = update.callback_query
-    await query.answer("Generating label...")
+    await query.answer("Generating label…")
 
-    # Parse encoded data from message
-    message_text = query.message.text #pyright: ignore
+    # 1️⃣ Parse the encoded payload
     data_marker = "Encoded Data:"
-    ticket_data = None
-    match = re.search(f"^{re.escape(data_marker)}\\s+(.*)$", message_text, re.MULTILINE)
-
-    if match:
-        try:
-            json_str = base64.b64decode(match.group(1).strip()).decode('utf-8')
-            ticket_data = json.loads(json_str)
-        except Exception as e:
-            logger.error(f"Error decoding ticket data: {e}")
-
-    if not ticket_data:
-        await query.message.reply_text("❌ Could not retrieve ticket data for printing.") #pyright: ignore
-        return
+    text = query.message.text or "" #pyright: ignore
+    m = re.search(rf"^{re.escape(data_marker)}\s+(.*)$", text, re.MULTILINE)
+    if not m:
+        return await query.message.reply_text("❌ Ticket data not found.") #pyright: ignore
+    try:
+        payload = base64.b64decode(m.group(1)).decode("utf-8")
+        ticket = json.loads(payload)
+    except Exception:
+        return await query.message.reply_text("❌ Failed to decode ticket data.") #pyright: ignore
 
     # Extract fields
-    phone = ticket_data.get('p', 'N/A')
-    description = ticket_data.get('d', '')
-    user_identifier = ticket_data.get('s', '')
-    timestamp = ticket_data.get('t', '')
+    phone           = ticket.get("p", "")
+    description     = ticket.get("d", "")
+    user_identifier = ticket.get("s", "")
+    timestamp       = ticket.get("t", "")
 
-    # Label dimensions in mm and DPI
-    LABEL_W_MM, LABEL_H_MM = 58, 40
-    DPI = 203
-    def mm2px(mm): return int(mm * DPI / 25.4)
-    w_px, h_px = mm2px(LABEL_W_MM), mm2px(LABEL_H_MM)
-
-    # Create image
-    img = Image.new('RGB', (w_px, h_px), 'white')
+    # 2️⃣ Setup canvas
+    MM_TO_IN = 1.0 / 25.4
+    DPI      = 203
+    W_MM, H_MM = 58, 40
+    W_PX = int(W_MM * MM_TO_IN * DPI)
+    H_PX = int(H_MM * MM_TO_IN * DPI)
+    img = Image.new("RGB", (W_PX, H_PX), "white")
     draw = ImageDraw.Draw(img)
 
-    # Load fonts
-    font_path = "./fonts//Roboto/Roboto-VariableFont_wdth,wght.ttf"
-    font_large = ImageFont.truetype(font_path, 32)   # for company name
-    font_med   = ImageFont.truetype(font_path, 20)   # for labels
-    font_small = ImageFont.truetype(font_path, 14)   # for wrapping description
+    # 3️⃣ Load static TTF fonts
+    # (make sure these files exist in ./fonts/Roboto/)
+    font_header = ImageFont.truetype("./fonts/Roboto/static/Roboto-Bold.ttf",   24)
+    font_label  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 16)
+    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 12)
 
-    # Margins
-    m = mm2px(2)
+    # 4️⃣ Helper to draw text + advance Y by metrics
+    def draw_line(text: str, font: ImageFont.FreeTypeFont, x: int, y: int) -> int:
+        draw.text((x, y), text, font=font, fill="black")
+        ascent, descent = font.getmetrics()
+        return y + ascent + descent + 2  # 2 px extra leading
 
-    # Draw logo placeholder
-    logo_sz = mm2px(20)
-    draw.rectangle([m, m, m+logo_sz, m+logo_sz], outline='black', width=2)
-    draw.text((m+5, m+logo_sz//2 - 7), "Logo", font=font_med, fill='black')
+    # 5️⃣ Draw header (logo & company info)
+    m_px = int(2 * MM_TO_IN * DPI)    # 2 mm margin
+    logo_sz = int(20 * MM_TO_IN * DPI) # 20 mm square
+    # logo placeholder:
+    draw.rectangle([m_px, m_px, m_px+logo_sz, m_px+logo_sz], outline="black", width=2)
+    draw.text((m_px+5, m_px + logo_sz//2 - 7), "Logo", font=font_label, fill="black")
 
-    # Company info (customize these)
-    cx = m + logo_sz + mm2px(2)
-    draw.text((cx, m), "My Company, Inc.", font=font_large, fill='black')
-    draw.text((cx, m+15), "123 Main St, Hometown", font=font_med, fill='black')
-    draw.text((cx, m+30), "+1 (800) 555-1234", font=font_med, fill='black')
+    # company text
+    x0 = m_px + logo_sz + int(2 * MM_TO_IN * DPI)
+    y0 = m_px
+    y0 = draw_line("My Company, Inc.",        font_header, x0, y0)
+    y0 = draw_line("123 Main St, Hometown",   font_label,  x0, y0)
+    y0 = draw_line("+1 (800) 555-1234",       font_label,  x0, y0)
 
-    # Divider
-    y_div = m + logo_sz + mm2px(2)
-    draw.line((m, y_div, w_px-m, y_div), fill='black', width=2)
+    # divider
+    y_div = m_px + logo_sz + int(2 * MM_TO_IN * DPI)
+    draw.line((m_px, y_div, W_PX-m_px, y_div), fill="black", width=2)
 
-    # Ticket details
-    y = y_div + mm2px(2)
-    draw.text((m, y), f"Submitted by: {user_identifier}", font=font_med, fill='black'); y += 12
-    draw.text((m, y), f"Phone: {phone}", font=font_med, fill='black'); y += 12
-    draw.text((m, y), f"Time: {timestamp}", font=font_med, fill='black'); y += 16
-    draw.text((m, y), "Description:", font=font_med, fill='black'); y += 12
-    for line in textwrap.wrap(description, width=35):
-        draw.text((m, y), line, font=font_small, fill='black')
-        y += 10
+    # 6️⃣ Draw ticket details
+    y1 = y_div + int(2 * MM_TO_IN * DPI)
+    x1 = m_px
+    y1 = draw_line(f"Submitted by: {user_identifier}", font_label, x1, y1)
+    y1 = draw_line(f"Phone: {phone}",                 font_label, x1, y1)
+    y1 = draw_line(f"Time: {timestamp}",              font_label, x1, y1)
+    y1 = draw_line("Description:",                    font_label, x1, y1)
 
-    # Save to buffer
+    # wrap & draw description
+    for line in textwrap.wrap(description, width=30):
+        y1 = draw_line(line, font_small, x1, y1)
+
+    # 7️⃣ Send PNG back to chat
     buf = io.BytesIO()
-    img.save(buf, format='PNG', dpi=(DPI, DPI))
+    img.save(buf, format="PNG", dpi=(DPI, DPI))
     buf.seek(0)
-
-    # Send label image back to user or channel
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=buf,
-        caption="Here is your ticket label:" 
+        caption="🖨️ Вот ваша этикетка."
     )
+
 
 
 

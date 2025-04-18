@@ -328,9 +328,10 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     draw = ImageDraw.Draw(img)
 
     # Load fonts
-    font_large = ImageFont.load_default()
-    font_med = ImageFont.load_default()
-    font_small = ImageFont.load_default()
+    font_path = "./fonts//Roboto/Roboto-VariableFont_wdth,wght.ttf"
+    font_large = ImageFont.truetype(font_path, 32)   # for company name
+    font_med   = ImageFont.truetype(font_path, 20)   # for labels
+    font_small = ImageFont.truetype(font_path, 14)   # for wrapping description
 
     # Margins
     m = mm2px(2)

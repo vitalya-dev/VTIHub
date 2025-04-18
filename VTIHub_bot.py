@@ -292,14 +292,17 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handles the 'Print' button:
-      1. Parses the base64‑encoded ticket data.
-      2. Renders a 58×40 mm PNG label at 203 dpi using Roboto TTFs.
-      3. Sends the label image back into the chat.
+      1. Parses base64 ticket data.
+      2. Renders a 58×40 mm PNG label at 203 dpi with:
+         – a header banner (small logo + company info)
+         – full-width body (Submitted by / Phone / Time)
+         – description at the bottom.
+      3. Sends the resulting image back into the chat.
     """
     query = update.callback_query
     await query.answer("Generating label…")
 
-    # 1️⃣ Parse the encoded payload
+    # 1️⃣ Decode the ticket payload
     data_marker = "Encoded Data:"
     text = query.message.text or "" #pyright: ignore
     m = re.search(rf"^{re.escape(data_marker)}\s+(.*)$", text, re.MULTILINE)
@@ -309,66 +312,95 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         payload = base64.b64decode(m.group(1)).decode("utf-8")
         ticket = json.loads(payload)
     except Exception:
-        return await query.message.reply_text("❌ Failed to decode ticket data.") #pyright: ignore
+        return await query.message.reply_text("❌ Failed to decode ticket data.")#pyright: ignore
 
-    # Extract fields
     phone           = ticket.get("p", "")
     description     = ticket.get("d", "")
     user_identifier = ticket.get("s", "")
     timestamp       = ticket.get("t", "")
 
-    # 2️⃣ Setup canvas
-    MM_TO_IN = 1.0 / 25.4
-    DPI      = 203
+   # 2️⃣ Canvas setup
+    MM2IN = 1.0 / 25.4
+    DPI   = 203
     W_MM, H_MM = 58, 40
-    W_PX = int(W_MM * MM_TO_IN * DPI)
-    H_PX = int(H_MM * MM_TO_IN * DPI)
+    W_PX = int(W_MM * MM2IN * DPI)
+    H_PX = int(H_MM * MM2IN * DPI)
     img = Image.new("RGB", (W_PX, H_PX), "white")
     draw = ImageDraw.Draw(img)
 
-    # 3️⃣ Load static TTF fonts
-    # (make sure these files exist in ./fonts/Roboto/)
-    font_header = ImageFont.truetype("./fonts/Roboto/static/Roboto-Bold.ttf",   24)
-    font_label  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 16)
-    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 12)
+    # 3️⃣ Load larger TTF fonts
+    font_header = ImageFont.truetype("./fonts/Roboto/static/Roboto-Bold.ttf",   28)  # ↑ from 20 to 28
+    font_body   = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 18)  # ↑ from 14 to 18
+    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 16)  # ↑ from 12 to 16
 
-    # 4️⃣ Helper to draw text + advance Y by metrics
-    def draw_line(text: str, font: ImageFont.FreeTypeFont, x: int, y: int) -> int:
-        draw.text((x, y), text, font=font, fill="black")
-        ascent, descent = font.getmetrics()
-        return y + ascent + descent + 2  # 2 px extra leading
+    # 4️⃣ Helpers (unchanged) …
+    def mm2px(mm: float) -> int:
+        return int(mm * MM2IN * DPI)
+    def draw_line(txt: str, font, x: int, y: int) -> int:
+        draw.text((x, y), txt, font=font, fill="black")
+        a, d = font.getmetrics()
+        return y + a + d + 4  # give a bit more leading
 
-    # 5️⃣ Draw header (logo & company info)
-    m_px = int(2 * MM_TO_IN * DPI)    # 2 mm margin
-    logo_sz = int(20 * MM_TO_IN * DPI) # 20 mm square
-    # logo placeholder:
-    draw.rectangle([m_px, m_px, m_px+logo_sz, m_px+logo_sz], outline="black", width=2)
-    draw.text((m_px+5, m_px + logo_sz//2 - 7), "Logo", font=font_label, fill="black")
+    # 5️⃣ Header banner
+    margin = mm2px(2)
+    icon_sz = mm2px(12)
 
-    # company text
-    x0 = m_px + logo_sz + int(2 * MM_TO_IN * DPI)
-    y0 = m_px
-    y0 = draw_line("My Company, Inc.",        font_header, x0, y0)
-    y0 = draw_line("123 Main St, Hometown",   font_label,  x0, y0)
-    y0 = draw_line("+1 (800) 555-1234",       font_label,  x0, y0)
+    # — Load, resize and paste your logo instead of drawing a blank rectangle —
+    logo = Image.open("./logo.png").convert("RGBA")
+    #logo = logo.resize((icon_sz, icon_sz))
+    img.paste(logo, (margin, margin), logo)
+    draw.rectangle([margin, margin, margin+icon_sz, margin+icon_sz], outline="black", width=2)
+    x0 = margin + icon_sz + mm2px(1)
+    y0 = margin
+    y0 = draw_line("My Company, Inc.",       font_header, x0, y0)
+    y0 = draw_line("123 Main St., Hometown",  font_body,   x0, y0)
+    y0 = draw_line("+1 (800) 555‑1234",       font_body,   x0, y0)
 
-    # divider
-    y_div = m_px + logo_sz + int(2 * MM_TO_IN * DPI)
-    draw.line((m_px, y_div, W_PX-m_px, y_div), fill="black", width=2)
+    banner_h = max(margin + icon_sz, y0) + mm2px(1)
+    draw.line((0, banner_h, W_PX, banner_h), fill="black", width=2)
 
-    # 6️⃣ Draw ticket details
-    y1 = y_div + int(2 * MM_TO_IN * DPI)
-    x1 = m_px
-    y1 = draw_line(f"Submitted by: {user_identifier}", font_label, x1, y1)
-    y1 = draw_line(f"Phone: {phone}",                 font_label, x1, y1)
-    y1 = draw_line(f"Time: {timestamp}",              font_label, x1, y1)
-    y1 = draw_line("Description:",                    font_label, x1, y1)
+    # 6️⃣ Full‑width body
+    y1 = banner_h + mm2px(2)
+    x1 = margin
+    y1 = draw_line(f"Submitted by: {user_identifier}", font_body, x1, y1)
+    y1 = draw_line(f"Phone: {phone}",                 font_body, x1, y1)
+    y1 = draw_line(f"Time: {timestamp}",              font_body, x1, y1)
 
-    # wrap & draw description
-    for line in textwrap.wrap(description, width=30):
+    # 7️⃣ Description
+    y1 += mm2px(1)
+    y1 = draw_line("Description:", font_body, x1, y1)
+    # wrap narrower now that text is larger
+    for line in textwrap.wrap(description, width=28):
         y1 = draw_line(line, font_small, x1, y1)
 
-    # 7️⃣ Send PNG back to chat
+
+    # ➡️ Empty commentary box at bottom‑right
+    BOX_W_MM, BOX_H_MM = 20, 10
+    box_w = mm2px(BOX_W_MM)
+    box_h = mm2px(BOX_H_MM)
+
+    # bottom‑right corner, inset by your margin
+    x2 = W_PX - box_w
+    y2 = H_PX - box_h
+
+    # draw the empty rectangle
+    draw.rectangle(
+        [x2, y2, x2 + box_w, y2 + box_h],
+        outline="black", width=2
+    )
+
+
+    # ➡️ Label it “Commentary”
+    text_x = x2 + mm2px(1)
+    text_y = y2 + mm2px(1)
+    draw.text(
+        (text_x, text_y),
+        "Commentary/$:",
+        font=font_small,
+        fill="black"
+    )
+
+    # 8️⃣ Send image (unchanged)
     buf = io.BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI))
     buf.seek(0)
@@ -377,6 +409,7 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         photo=buf,
         caption="🖨️ Вот ваша этикетка."
     )
+
 
 
 

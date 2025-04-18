@@ -4,8 +4,12 @@ import argparse
 import pytz
 import base64
 import re
+import io
+
 
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
+import textwrap
 
 # Import necessary components from python-telegram-bot
 from telegram import (
@@ -286,50 +290,87 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the 'Print' button callback by parsing encoded data from the message text."""
+    """Handles the 'Print' button: parses data, renders PNG label, and sends it."""
     query = update.callback_query
-    await query.answer("Processing print request...")
+    await query.answer("Generating label...")
 
-    callback_data = query.data # Should be "print:parse_encoded"
-    message = query.message
-    message_text = message.text # Get the full text of the message #pyright: ignore
-
-    logger.info(f"Received callback query '{callback_data}'. Parsing encoded data from message ID {message.message_id}")
-
-    # --- Parse the message text to find and decode the embedded data ---
+    # Parse encoded data from message
+    message_text = query.message.text #pyright: ignore
+    data_marker = "Encoded Data:"
     ticket_data = None
-    data_marker = "Encoded Data:" # Must match the marker used in process_ticket_app_data
+    match = re.search(f"^{re.escape(data_marker)}\\s+(.*)$", message_text, re.MULTILINE)
 
-    try:
-        # Use regex to find the marker and capture the data string after it
-        # `re.escape` handles potential special characters in the marker itself
-        # `(.*)` captures the rest of the line after the marker (non-greedy `.*?` might be safer if marker could appear again)
-        match = re.search(f"^{re.escape(data_marker)}\\s+(.*)$", message_text, re.MULTILINE)
+    if match:
+        try:
+            json_str = base64.b64decode(match.group(1).strip()).decode('utf-8')
+            ticket_data = json.loads(json_str)
+        except Exception as e:
+            logger.error(f"Error decoding ticket data: {e}")
 
-        if match:
-            encoded_data_string = match.group(1).strip()
-            logger.debug(f"Found encoded data string: {encoded_data_string}")
+    if not ticket_data:
+        await query.message.reply_text("❌ Could not retrieve ticket data for printing.") #pyright: ignore
+        return
 
-            json_string_bytes = base64.b64decode(encoded_data_string)
-            json_string = json_string_bytes.decode('utf-8')
+    # Extract fields
+    phone = ticket_data.get('p', 'N/A')
+    description = ticket_data.get('d', '')
+    user_identifier = ticket_data.get('s', '')
+    timestamp = ticket_data.get('t', '')
 
-            # Parse the JSON string
-            ticket_data = json.loads(json_string)
-            logger.info(f"Successfully parsed embedded data: {ticket_data}")
+    # Label dimensions in mm and DPI
+    LABEL_W_MM, LABEL_H_MM = 58, 40
+    DPI = 203
+    def mm2px(mm): return int(mm * DPI / 25.4)
+    w_px, h_px = mm2px(LABEL_W_MM), mm2px(LABEL_H_MM)
 
-        else:
-            logger.warning(f"Could not find marker '{data_marker}' in message text.")
+    # Create image
+    img = Image.new('RGB', (w_px, h_px), 'white')
+    draw = ImageDraw.Draw(img)
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode JSON from embedded data: {e}", exc_info=True)
-        ticket_data = None # Ensure data is None on failure
-    except Exception as e:
-        logger.error(f"Error parsing encoded data from message: {e}", exc_info=True)
-        ticket_data = None
+    # Load fonts
+    font_large = ImageFont.load_default()
+    font_med = ImageFont.load_default()
+    font_small = ImageFont.load_default()
 
-    # --- Now use the extracted data (if found) ---
-    if ticket_data:
-        pass
+    # Margins
+    m = mm2px(2)
+
+    # Draw logo placeholder
+    logo_sz = mm2px(20)
+    draw.rectangle([m, m, m+logo_sz, m+logo_sz], outline='black', width=2)
+    draw.text((m+5, m+logo_sz//2 - 7), "Logo", font=font_med, fill='black')
+
+    # Company info (customize these)
+    cx = m + logo_sz + mm2px(2)
+    draw.text((cx, m), "My Company, Inc.", font=font_large, fill='black')
+    draw.text((cx, m+15), "123 Main St, Hometown", font=font_med, fill='black')
+    draw.text((cx, m+30), "+1 (800) 555-1234", font=font_med, fill='black')
+
+    # Divider
+    y_div = m + logo_sz + mm2px(2)
+    draw.line((m, y_div, w_px-m, y_div), fill='black', width=2)
+
+    # Ticket details
+    y = y_div + mm2px(2)
+    draw.text((m, y), f"Submitted by: {user_identifier}", font=font_med, fill='black'); y += 12
+    draw.text((m, y), f"Phone: {phone}", font=font_med, fill='black'); y += 12
+    draw.text((m, y), f"Time: {timestamp}", font=font_med, fill='black'); y += 16
+    draw.text((m, y), "Description:", font=font_med, fill='black'); y += 12
+    for line in textwrap.wrap(description, width=35):
+        draw.text((m, y), line, font=font_small, fill='black')
+        y += 10
+
+    # Save to buffer
+    buf = io.BytesIO()
+    img.save(buf, format='PNG', dpi=(DPI, DPI))
+    buf.seek(0)
+
+    # Send label image back to user or channel
+    await context.bot.send_photo(
+        chat_id=update.effective_chat.id,
+        photo=buf,
+        caption="Here is your ticket label:" 
+    )
 
 
 

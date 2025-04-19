@@ -228,12 +228,12 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     if TARGET_CHANNEL_ID:
         try:
             channel_message_text = (
-                f"✅ Ticket Created!\n\n"
-                f"👤 Submitted by: {user_identifier} (User ID: {user.id})\n"
-                f"🕒 Time: {current_time}\n"
-                f"--- Job Details ---\n"
-                f"📞 Phone: {phone} (Search: {search_hints})\n"
-                f"📝 Description: {description}\n\n"
+                f"✅ Заявка создана!\n\n"
+                f"👤 Отправил(а): {user_identifier}\n"
+                f"🕒 Время: {current_time}\n"
+                f"--- Детали заявки ---\n"
+                f"📞 Телефон: {phone} (Поиск: {search_hints})\n"
+                f"📝 Описание: {description}\n\n"
                 f"{data_marker} {base64_encoded_json}\n\n"
             )
 
@@ -263,16 +263,15 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     # --- STEP 2: After posting to channel, send user a full message ---
     try:
         user_message_text = (
-            f"✅ Ticket Created!\n\n"
-            f"👤 Submitted by: {user_identifier} (User ID: {user.id})\n"
-            f"🕒 Time: {current_time}\n"
-            f"--- Job Details ---\n"
-            f"📞 Phone: {phone} (Search: {search_hints})\n"
-            f"📝 Description: {description}\n\n"
+            f"✅ Заявка создана!\n\n"
+            f"👤 Отправил(а): {user_identifier}\n"
+            f"🕒 Время: {current_time}\n"
+            f"--- Детали заявки ---\n"
+            f"📞 Телефон: {phone} (Поиск: {search_hints})\n"
+            f"📝 Описание: {description}\n\n"
             f"{data_marker} {base64_encoded_json}\n\n"
-            f"🔗 [View Your Ticket in Channel]({message_link})\n\n"
+            f"🔗 [Посмотреть вашу заявку в канале]({message_link})\n\n"
         )
-
         await update.message.reply_text(
             text=user_message_text,
             reply_markup=keyboard,

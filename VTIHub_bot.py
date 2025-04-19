@@ -345,17 +345,18 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # 5️⃣ Header banner
     margin = mm2px(2)
     icon_sz = mm2px(12)
-
     # — Load, resize and paste your logo instead of drawing a blank rectangle —
     logo = Image.open("./logo.png").convert("RGBA")
-    #logo = logo.resize((icon_sz, icon_sz))
-    img.paste(logo, (margin, margin), logo)
-    draw.rectangle([margin, margin, margin+icon_sz, margin+icon_sz], outline="black", width=2)
+    logo = logo.resize((icon_sz, icon_sz))
+    img.paste(logo, (margin, margin + mm2px(1)), logo)
+    draw.rectangle([margin, margin + mm2px(1), margin+icon_sz, margin+mm2px(1)+icon_sz], outline="black", width=2)
     x0 = margin + icon_sz + mm2px(1)
     y0 = margin
-    y0 = draw_line("My Company, Inc.",       font_header, x0, y0)
-    y0 = draw_line("123 Main St., Hometown",  font_body,   x0, y0)
-    y0 = draw_line("+1 (800) 555‑1234",       font_body,   x0, y0)
+    y0 = draw_line("ООО «ВТИ»", font_header, x0, y0)
+    y0 = draw_line("ул Советская 26, г. Керчь",  font_body,   x0, y0)
+    y0 = draw_line("+7 (978) 762‑8967",       font_body,   x0, y0)
+    y0 = draw_line("+7 (978) 010‑4949",       font_body,   x0, y0)
+
 
     banner_h = max(margin + icon_sz, y0) + mm2px(1)
     draw.line((0, banner_h, W_PX, banner_h), fill="black", width=2)
@@ -363,13 +364,13 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # 6️⃣ Full‑width body
     y1 = banner_h + mm2px(2)
     x1 = margin
-    y1 = draw_line(f"Submitted by: {user_identifier}", font_body, x1, y1)
-    y1 = draw_line(f"Phone: {phone}",                 font_body, x1, y1)
-    y1 = draw_line(f"Time: {timestamp}",              font_body, x1, y1)
+    y1 = draw_line(f"Принял(а): {user_identifier}", font_body, x1, y1)
+    y1 = draw_line(f"Телефон: {phone}",                font_body, x1, y1)
+    y1 = draw_line(f"Время: {timestamp}",              font_body, x1, y1)
 
     # 7️⃣ Description
     y1 += mm2px(1)
-    y1 = draw_line("Description:", font_body, x1, y1)
+    y1 = draw_line("Описание:", font_body, x1, y1)
     # wrap narrower now that text is larger
     for line in textwrap.wrap(description, width=28):
         y1 = draw_line(line, font_small, x1, y1)
@@ -391,17 +392,6 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         outline="black",
         width=2
     )
-
-
-    # # ➡️ Label it “💬 Commentary”
-    # text_x = x2 + mm2px(1)
-    # text_y = y2 + mm2px(1)
-    # draw.text(
-    #     (text_x, text_y),
-    #     "Коментарии:",
-    #     font=font_small,
-    #     fill="black"
-    # )
 
     # 8️⃣ Send image (unchanged)
     buf = io.BytesIO()

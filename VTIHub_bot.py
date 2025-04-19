@@ -391,6 +391,8 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         width=2
     )
 
+    img = img.resize((W_PX * 4, H_PX * 4), Image.Resampling.NEAREST)
+
     # 8️⃣ Send image (unchanged)
     buf = io.BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI))

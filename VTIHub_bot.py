@@ -393,15 +393,15 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
-    # ➡️ Label it “💬 Commentary”
-    text_x = x2 + mm2px(1)
-    text_y = y2 + mm2px(1)
-    draw.text(
-        (text_x, text_y),
-        "Коментарии:",
-        font=font_small,
-        fill="black"
-    )
+    # # ➡️ Label it “💬 Commentary”
+    # text_x = x2 + mm2px(1)
+    # text_y = y2 + mm2px(1)
+    # draw.text(
+    #     (text_x, text_y),
+    #     "Коментарии:",
+    #     font=font_small,
+    #     fill="black"
+    # )
 
     # 8️⃣ Send image (unchanged)
     buf = io.BytesIO()

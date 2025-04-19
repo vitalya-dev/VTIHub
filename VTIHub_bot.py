@@ -5,7 +5,7 @@ import pytz
 import base64
 import re
 import io
-
+import os
 
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
@@ -391,17 +391,25 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         width=2
     )
 
-    img = img.resize((W_PX * 4, H_PX * 4), Image.Resampling.NEAREST)
+    #img = img.resize((W_PX * 4, H_PX * 4), Image.Resampling.NEAREST)
 
-    # 8️⃣ Send image (unchanged)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG", dpi=(DPI, DPI))
-    buf.seek(0)
-    await context.bot.send_photo(
-        chat_id=update.effective_chat.id,
-        photo=buf,
-        caption="🖨️ Вот ваша этикетка."
-    )
+    # — ensure output directory exists
+    output_dir = "./labels"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # — build a filename (you can customize this pattern)
+    safe_user = re.sub(r"\W+", "_", user_identifier)  # make username filesystem-safe
+    timestamp_safe = timestamp.replace(" ", "_").replace(":", "-")
+    file_name = f"label_{safe_user}_{timestamp_safe}.png"
+    file_path = os.path.join(output_dir, file_name)
+
+    # — save the image
+    img.save(file_path, format="PNG", dpi=(DPI, DPI))
+    logger.info(f"Label saved to disk at {file_path}")
+
+    # Optionally, notify the user that it was saved
+    await query.answer("Done")
+
 
 
 

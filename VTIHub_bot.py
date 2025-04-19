@@ -54,9 +54,7 @@ logger = logging.getLogger(__name__)
 async def setup_commands(application: Application):
     """Set bot commands menu."""
     await application.bot.set_my_commands([
-        BotCommand("start", "Show available apps"),
-        BotCommand("help", "Get assistance and instructions"),
-        BotCommand("hide_menu", "Hide the custom action keyboard") # Command to remove the reply keyboard
+        BotCommand("start", "Показать панель управления"),
     ])
     logger.info("Bot commands set.")
 
@@ -73,95 +71,20 @@ async def post_init(application: Application):
     await setup_menu_button(application)
     logger.info("Post-initialization setup complete.")
 
-# --- Command Handlers ---
 
 # --- Command Handlers ---
 
-async def channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /channel command, providing a link to the target channel."""
-    if not TARGET_CHANNEL_ID:
-        await update.message.reply_text("The target channel is not configured.")
-        return
-
-    try:
-        # Extract the internal numeric ID (remove -100 prefix)
-        # Ensure TARGET_CHANNEL_ID is treated as a string for slicing
-        channel_url = f"https://t.me/c/2558046400/7" # Link format for private channels (for members)
-
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➡️ Open VTIHub Channel", url=channel_url)]
-        ])
-
-        await update.message.reply_text(
-            "Click the button below to open the VTIHub channel (requires membership):",
-            reply_markup=keyboard
-        )
-        logger.info(f"Provided channel link to user {update.effective_user.id}")
-
-    except Exception as e:
-        logger.error(f"Error creating channel link for {TARGET_CHANNEL_ID}: {e}", exc_info=True)
-        await update.message.reply_text("Sorry, couldn't generate the link to the channel.")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /start command. Displays ReplyKeyboard buttons to launch different Web Apps."""
-    user_name = update.effective_user.first_name
-
-    # Create KeyboardButton objects, one for each web app
-    keyboard_buttons_row1 = []
-    keyboard_buttons_row2 = [] # Example for layout
-    
-    button_count = 0
-    if "ticket" in WEB_APP_URLS:
-        button = KeyboardButton(
-                     "📄 New Ticket", # Descriptive text
-                     web_app=WebAppInfo(url=WEB_APP_URLS["ticket"])
-                 )
-        if button_count % 2 == 0: # Simple 2-column layout
-             keyboard_buttons_row1.append(button)
-        else:
-             keyboard_buttons_row2.append(button)
-        button_count += 1
-    # Combine rows - filter out empty rows if any
-    keyboard_layout = [row for row in [keyboard_buttons_row1, keyboard_buttons_row2] if row]
-
-    if keyboard_layout:
-        # Create the ReplyKeyboardMarkup
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=keyboard_layout,
-            resize_keyboard=True, # Makes the keyboard fit better
-            one_time_keyboard=False, # Keyboard persists until replaced or removed
-            input_field_placeholder="Select an action from the menu below" # Helpful hint
-        )
-        await update.message.reply_text(
-            f"Hello {user_name}! Please choose an action using the buttons below the text field.\n\n"
-            f"Type /hide_menu to remove these buttons and return to the standard keyboard.",
-            reply_markup=keyboard
-        )
-    else:
-        await update.message.reply_text(
-             f"Hello {user_name}! Sorry, no actions are currently configured."
-             # Optionally remove any existing custom keyboard if no actions available
-             # reply_markup=ReplyKeyboardRemove()
-        )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /help command. Provides instructions."""
+     # only show a single WebApp button, no extra text
+    kb = [
+        [KeyboardButton("📄 Новая Заявка", web_app=WebAppInfo(url=WEB_APP_URLS["ticket"]))]
+    ]
     await update.message.reply_text(
-        "ℹ️ How to use this bot:\n\n"
-        "1. Use the /start command to show buttons for available actions below the text input area.\n"
-        "2. Tap the button for the action you want. This will open the relevant web app.\n"
-        "3. Fill out the details in the web app interface and submit.\n"
-        "4. You'll receive a confirmation message back here in the chat.\n"
-        "5. The action buttons will remain visible. Use /hide_menu to remove them and use the standard keyboard.\n\n",
-        reply_markup=ReplyKeyboardRemove() # Remove keyboard when showing help
+        "🐶",  # zero‑width space so Telegram still sends it
+        reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True)
     )
 
-async def hide_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /hide_menu command. Removes the custom ReplyKeyboard."""
-    await update.message.reply_text(
-        "Action menu hidden. Type /start to show it again.",
-        reply_markup=ReplyKeyboardRemove() # This object removes the custom keyboard
-    )
 
 # --- Data Processing Functions ---
 # (These remain the same as the previous multi-app version using InlineKeyboard)
@@ -299,7 +222,7 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
       3. Sends the resulting image back into the chat.
     """
     query = update.callback_query
-    await query.answer("Generating label…")
+    temp_msg = await query.message.reply_text("🖨️") #pyright: ignore
 
     # 1️⃣ Decode the ticket payload
     data_marker = "Encoded Data:"
@@ -407,8 +330,14 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     img.save(file_path, format="PNG", dpi=(DPI, DPI))
     logger.info(f"Label saved to disk at {file_path}")
 
-    # Optionally, notify the user that it was saved
-    await query.answer("Done")
+    #  ➡️ delete our “🖨️ Generating” message
+    await context.bot.delete_message(
+        chat_id=temp_msg.chat.id,
+        message_id=temp_msg.message_id
+    )
+    # finally, send the print notification
+    await query.answer("✅ Этикетка напечатана!")
+
 
 
 
@@ -451,14 +380,6 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
             "⚠️ An unexpected error occurred. Please try again later via /start."
         )
 
-async def handle_other_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle any other text messages that aren't commands or web app data."""
-    # You might want this handler to be less intrusive if the user is typing
-    # while the custom keyboard is open. For now, it just reminds them.
-    await update.message.reply_text(
-        "👋 Use the buttons below to start an action, or type /start to refresh the menu. Use /hide_menu to type normally, or /help for instructions."
-    )
-
 # --- Main Execution ---
 
 if __name__ == "__main__":
@@ -475,12 +396,7 @@ if __name__ == "__main__":
 
     # --- Add Handlers ---
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("channel", channel_command)) # Add handler for /channel
-    application.add_handler(CommandHandler("hide_menu", hide_menu_command)) # Handler for removing the keyboard
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-    # Make sure the text handler doesn't interfere with commands starting with /
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.StatusUpdate.WEB_APP_DATA, handle_other_messages))
     application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_encoded$"))
 
     logger.info("Bot started and polling for updates...")

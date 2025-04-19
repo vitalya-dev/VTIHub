@@ -330,8 +330,7 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # 3️⃣ Load larger TTF fonts
     font_header = ImageFont.truetype("./fonts/Roboto/static/Roboto-Bold.ttf",   28)  # ↑ from 20 to 28
     font_body   = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 18)  # ↑ from 14 to 18
-    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 14)  # ↑ from 12 to 16
-    font_emoji   = ImageFont.truetype("./fonts/Noto_Color_Emoji/NotoColorEmoji-Regular.ttf", 16)
+    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 16)  # ↑ from 12 to 16
 
     # 4️⃣ Helpers (unchanged) …
     def mm2px(mm: float) -> int:

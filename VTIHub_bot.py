@@ -331,7 +331,8 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # 3️⃣ Load larger TTF fonts
     font_header = ImageFont.truetype("./fonts/Roboto/static/Roboto-Bold.ttf",   28)  # ↑ from 20 to 28
     font_body   = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 18)  # ↑ from 14 to 18
-    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 16)  # ↑ from 12 to 16
+    font_small  = ImageFont.truetype("./fonts/Roboto/static/Roboto-Regular.ttf", 14)  # ↑ from 12 to 16
+    font_emoji   = ImageFont.truetype("./fonts/Noto_Color_Emoji/NotoColorEmoji-Regular.ttf", 16)
 
     # 4️⃣ Helpers (unchanged) …
     def mm2px(mm: float) -> int:
@@ -380,22 +381,24 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     box_h = mm2px(BOX_H_MM)
 
     # bottom‑right corner, inset by your margin
-    x2 = W_PX - box_w
-    y2 = H_PX - box_h
+    x2 = W_PX - int(margin / 3) - box_w
+    y2 = H_PX - int(margin / 3) - box_h
 
     # draw the empty rectangle
-    draw.rectangle(
+    draw.rounded_rectangle(
         [x2, y2, x2 + box_w, y2 + box_h],
-        outline="black", width=2
+        radius=mm2px(1.5),         # adjust corner roundness here
+        outline="black",
+        width=2
     )
 
 
-    # ➡️ Label it “Commentary”
+    # ➡️ Label it “💬 Commentary”
     text_x = x2 + mm2px(1)
     text_y = y2 + mm2px(1)
     draw.text(
         (text_x, text_y),
-        "Commentary/$:",
+        "Коментарии:",
         font=font_small,
         fill="black"
     )

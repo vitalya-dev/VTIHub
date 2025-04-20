@@ -80,89 +80,69 @@ async def post_init(application: Application):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handles the /start command.
-    Checks if the user is in the target channel. If not, attempts to send an invite link.
-    Then, always displays the main keyboard with the Web App button.
+    Checks if the user is an active member (member, admin, owner) of the target channel.
+    If YES, shows the main keyboard with the Web App button.
+    If NO, sends a message denying access and does NOT show the keyboard.
     """
     user = update.effective_user
     user_id = user.id
+    user_info_log = f"{user_id} ({user.username or user.full_name})" # For clearer logs
 
-    user_in_channel = False
-    invite_message = "" # Message to send regarding channel access
+    user_can_access = False # Assume no access initially
+    denial_reason = "Извините, этот бот доступен только для сотрудников ВТИ, являющихся участниками рабочего канала." # Default denial message
 
     if not TARGET_CHANNEL_ID:
-        logger.error("TARGET_CHANNEL_ID is not configured in the bot code.")
-        # Proceed without checking, just show the keyboard
-        invite_message = "⚠️ Channel access is not configured."
+        logger.error("TARGET_CHANNEL_ID is not configured in the bot code. Denying access.")
+        denial_reason = "⚠️ Ошибка конфигурации бота. Доступ запрещен." # Specific error for config issue
     else:
         try:
             # Check the user's status in the target channel
             chat_member = await context.bot.get_chat_member(chat_id=TARGET_CHANNEL_ID, user_id=user_id)
 
-            # Check for active membership statuses
-            if chat_member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-                user_in_channel = True
-                logger.info(f"User {user_id} ({user.username or user.full_name}) is already a member of channel {TARGET_CHANNEL_ID}.")
+            # Define allowed statuses for access
+            # Use the constants consistent with your import style:
+            # allowed_statuses = [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+            allowed_statuses = [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+
+            if chat_member.status in allowed_statuses:
+                user_can_access = True
+                logger.info(f"Access GRANTED for user {user_info_log}. Status: {chat_member.status} in channel {TARGET_CHANNEL_ID}.")
             else:
-                # User might be LEFT or KICKED. Treat as not an active member.
-                logger.info(f"User {user_id} ({user.username or user.full_name}) has status '{chat_member.status}' in channel {TARGET_CHANNEL_ID}. Not an active member.")
-                # We will attempt to invite them again below
+                # User has a status like LEFT or KICKED, which doesn't grant access.
+                logger.warning(f"Access DENIED for user {user_info_log}. Status: {chat_member.status} in channel {TARGET_CHANNEL_ID}.")
+                # Keep the default denial_reason
 
         except error.BadRequest as e:
             # This specific error often means the user is not in the chat at all
             if "user not found" in e.message.lower():
-                logger.info(f"User {user_id} ({user.username or user.full_name}) not found in channel {TARGET_CHANNEL_ID}. They are not a member.")
-                # Proceed to invite them
+                logger.warning(f"Access DENIED for user {user_info_log}. User not found in channel {TARGET_CHANNEL_ID}.")
+                # Keep the default denial_reason
             else:
                 # Log other Bad Request errors (e.g., chat not found, bot permissions issue)
-                logger.error(f"BadRequest when checking membership for user {user_id} in channel {TARGET_CHANNEL_ID}: {e}")
-                invite_message = "⚠️ Couldn't check your channel membership status due to a configuration issue."
+                logger.error(f"BadRequest when checking membership for user {user_info_log} in channel {TARGET_CHANNEL_ID}: {e}")
+                denial_reason = "⚠️ Не удалось проверить ваше членство в канале из-за ошибки. Пожалуйста, попробуйте позже или свяжитесь с администратором."
         except error.TelegramError as e:
             # Catch other potential Telegram API errors
-            logger.error(f"TelegramError checking membership for {user_id} in {TARGET_CHANNEL_ID}: {e}")
-            invite_message = "⚠️ An error occurred while checking your channel status."
+            logger.error(f"TelegramError checking membership for {user_info_log} in {TARGET_CHANNEL_ID}: {e}")
+            denial_reason = "⚠️ Произошла ошибка при проверке доступа. Пожалуйста, попробуйте позже или свяжитесь с администратором."
 
-        # --- Attempt to invite if not already an active member and no error occurred during check ---
-        if not user_in_channel and not invite_message:
-            logger.info(f"User {user_id} is not an active member. Attempting to create invite link for channel {TARGET_CHANNEL_ID}.")
-            try:
-                # Create a new, single-use invite link for this user
-                # ** BOT NEEDS 'can_invite_users' ADMIN PERMISSION IN THE CHANNEL **
-                link = await context.bot.create_chat_invite_link(
-                    chat_id=TARGET_CHANNEL_ID,
-                    member_limit=1, # Ensures only this user can use this specific link
-                    name=f"Invite for {user.id} ({user.first_name})" # Optional: Helps identify link in channel settings
-                    # expire_date=datetime.now() + timedelta(days=1) # Optional: Make link expire
-                )
-                invite_message = (
-                    f"👋\n\n"
-                    f"Ссылка на на основной канал:\n"
-                    f"{link.invite_link}\n\n"
-                )
-                logger.info(f"Successfully created invite link for user {user_id} to channel {TARGET_CHANNEL_ID}.")
-
-            except error.BadRequest as e:
-                # This commonly happens if bot lacks 'can_invite_users' permission
-                 logger.error(f"BadRequest creating invite link for {TARGET_CHANNEL_ID}: {e} - ** CHECK BOT PERMISSIONS ('can_invite_users') **")
-                 invite_message = "⚠️ Sorry, I couldn't create an invite link for the channel right now. Please contact an administrator for access."
-            except error.TelegramError as e:
-                 logger.error(f"TelegramError creating invite link for {TARGET_CHANNEL_ID}: {e}")
-                 invite_message = "⚠️ An unexpected error occurred while trying to invite you to the channel. Please contact an administrator."
-
-    # --- Send the invite message (if any was generated) ---
-    if invite_message:
-        await update.message.reply_text(invite_message, parse_mode='Markdown', disable_web_page_preview=True)
-
-    # --- Always show the main keyboard ---
-    kb = [
-        [KeyboardButton("📄 Новая Заявка", web_app=WebAppInfo(url=WEB_APP_URLS["ticket"]))]
-    ]
-    # Send a consistent message regardless of invite status, maybe slightly different if they were just invited
-    main_message = "🐶"
-
-    await update.message.reply_text(
-        main_message,
-        reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True)
-    )
+    # --- Grant Access or Deny ---
+    if user_can_access:
+        # User is verified, show the main keyboard
+        kb = [
+            [KeyboardButton("📄 Новая Заявка", web_app=WebAppInfo(url=WEB_APP_URLS["ticket"]))]
+        ]
+        main_message = "🐶" # Your standard welcome message/emoji for authorized users
+        await update.message.reply_text(
+            main_message,
+            reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True)
+        )
+    else:
+        # User is not authorized, send the denial message and DO NOT show the keyboard
+        await update.message.reply_text(
+            denial_reason,
+            reply_markup=ReplyKeyboardRemove()
+        )
 
 
 # --- Data Processing Functions ---

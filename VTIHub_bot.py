@@ -46,7 +46,7 @@ WEB_APP_URLS = {
 }
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
-IRFANVIEW_PATH = "./i_view64"
+IRFANVIEW_PATH = "i_view64"
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -546,11 +546,11 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
          # --- NEW: Attempt Printing ---
         printer_name = context.bot_data.get('printer_name')
-        if printer_name and file_path:
+        if printer_name and absolute_file_path:
             logger.info(f"Printer name '{printer_name}' provided. Attempting to print {file_path}")
             print_command = [
                     IRFANVIEW_PATH,
-                    file_path,
+                    absolute_file_path,
                     f"/print={printer_name}" # Or try f'/print="{printer_name}"' if this fails
                 ]
             logger.info(f"Executing print command: {' '.join(print_command)}")

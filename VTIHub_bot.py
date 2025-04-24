@@ -6,6 +6,7 @@ import base64
 import re
 import io
 import os
+import subprocess
 
 from typing import Optional, Dict, Any, Tuple
 
@@ -45,6 +46,7 @@ WEB_APP_URLS = {
 }
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
+IRFANVIEW_PATH = "i_view64"
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -527,17 +529,36 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         # 3. Save Image (Optional: Send directly without saving)
         file_path = _save_label_image(label_image, ticket_data)
         if file_path is None:
-             await query.message.reply_text("❌ Failed to save the label image.") #pyright: ignore
+            await query.message.reply_text("❌ Failed to save the label image.") #pyright: ignore
              # Optionally still send the image even if saving failed:
              # bio = BytesIO()
              # bio.name = 'label.png'
              # label_image.save(bio, 'PNG')
              # bio.seek(0)
              # await query.message.reply_photo(photo=bio, caption=MSG_SUCCESS)
-             return
+            return
+
+         # --- NEW: Attempt Printing ---
+        printer_name = context.bot_data.get('printer_name')
+        if printer_name and file_path:
+            logger.info(f"Printer name '{printer_name}' provided. Attempting to print {file_path}")
+            print_command = [
+                    IRFANVIEW_PATH,
+                    file_path,
+                    f"/print={printer_name}" # Or try f'/print="{printer_name}"' if this fails
+                ]
+            logger.debug(f"Executing print command: {' '.join(print_command)}")
+            result = subprocess.run(
+                        print_command,
+                        check=True,         # Raise error if IrfanView returns non-zero exit code
+                        capture_output=True,# Capture stdout/stderr
+                        text=True,          # Decode stdout/stderr as text
+                        timeout=30          # Add a timeout (e.g., 30 seconds)
+                    )
+            logger.info(f"IrfanView print command successful for {file_path}. Output: {result.stdout}")
 
     except Exception as e:
-        logger.exception("Unhandled error in handle_print_callback:") # Log full traceback
+        logger.exception("Unhandled error in handle_print_callback:{e}") # Log full traceback
         await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
     finally:
         # Clean up the "Generating" message
@@ -593,6 +614,11 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Telegram Multi-WebApp Bot (ReplyKeyboard Menu)")
     parser.add_argument('--token', required=True, help='Telegram Bot Token')
+    parser.add_argument(
+        '--print',
+        default=None, # Default is no printing
+        help='Specify the network printer name for IrfanView printing (e.g., "MyPrinter" or "\\\\Server\\PrinterShare")'
+    )
     args = parser.parse_args()
 
     logger.info("Starting bot...")
@@ -601,6 +627,13 @@ if __name__ == "__main__":
         .token(args.token) \
         .post_init(post_init) \
         .build()
+
+    if args.print:
+        logger.info(f"Printer name specified: '{args.print}'. Printing will be enabled.")
+        application.bot_data['printer_name'] = args.print
+    else:
+        logger.info("No printer name specified. Printing via IrfanView is disabled.")
+        application.bot_data['printer_name'] = None # Explicitly set to None
 
     # --- Add Handlers ---
     application.add_handler(CommandHandler("start", start_command))

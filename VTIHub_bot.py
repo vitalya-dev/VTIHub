@@ -7,6 +7,8 @@ import re
 import io
 import os
 
+from typing import Optional, Dict, Any, Tuple
+
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
@@ -268,6 +270,101 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
         except Exception as e_notify:
             logger.error(f"Failed even to notify user {user_identifier} ({user.id}): {e_notify}")
 
+
+# Label Dimensions & Resolution
+MM2IN = 1.0 / 25.4
+DPI = 203
+LABEL_WIDTH_MM = 58
+LABEL_HEIGHT_MM = 40
+LABEL_WIDTH_PX = int(LABEL_WIDTH_MM * MM2IN * DPI)
+LABEL_HEIGHT_PX = int(LABEL_HEIGHT_MM * MM2IN * DPI)
+
+# Paths
+FONT_DIR = "./fonts/terminus-ttf-4.49.3/"
+FONT_BOLD_PATH = os.path.join(FONT_DIR, "TerminusTTF-Bold-4.49.3.ttf")
+LOGO_PATH = "./logo.png"
+OUTPUT_DIR = "./labels"
+
+# Font Sizes
+FONT_SIZE_HEADER = 28
+FONT_SIZE_BODY = 18
+FONT_SIZE_SMALL = 16
+
+
+# Layout & Styling
+MARGIN_MM = 2
+LOGO_SIZE_MM = 12
+COMMENT_BOX_WIDTH_MM = 20
+COMMENT_BOX_HEIGHT_MM = 10
+COMMENT_BOX_RADIUS_MM = 1.5
+LINE_SPACING = 4 # Extra pixels between lines
+TEXT_COLOR = "black"
+BACKGROUND_COLOR = "white"
+BORDER_COLOR = "black"
+BORDER_WIDTH = 2
+
+# Telegram Messages
+MSG_GENERATING = "🖨️ Generating label..."
+MSG_SUCCESS = "✅ Label generated!" # Changed from "printed" as it only generates
+MSG_ERR_NO_DATA = "❌ Ticket data not found in the message."
+MSG_ERR_DECODE = "❌ Failed to decode ticket data."
+MSG_ERR_GENERIC = "❌ An error occurred while generating the label."
+
+# Data Extraction
+DATA_MARKER = "Encoded Data:"
+
+def mm2px(mm: float) -> int:
+    """Converts millimeters to pixels based on DPI."""
+    return int(mm * MM2IN * DPI)
+
+def _load_fonts() -> Dict[str, ImageFont.FreeTypeFont]:
+    """Loads required fonts."""
+    try:
+        return {
+            "header": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_HEADER),
+            "body": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_BODY),
+            "small": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_SMALL),
+        }
+    except IOError as e:
+        logger.error(f"Failed to load font: {e}")
+        raise  # Re-raise to signal critical failure
+
+
+def _draw_text_line(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    x: int,
+    y: int,
+    color: str = TEXT_COLOR
+) -> int:
+    """Draws a line of text and returns the Y position for the next line."""
+    draw.text((x, y), text, font=font, fill=color)
+    ascent, descent = font.getmetrics()
+    # Use font.getbbox for more accurate height in newer Pillow versions if needed
+    # bbox = font.getbbox(text)
+    # line_height = bbox[3] - bbox[1]
+    line_height = ascent + descent
+    return y + line_height + LINE_SPACING
+
+def _parse_ticket_data(message_text: Optional[str]) -> Optional[dict[str, Any]]:
+    """Parses base64 encoded JSON ticket data from message text."""
+    if not message_text:
+        return None
+
+    match = re.search(rf"^{re.escape(DATA_MARKER)}\s+(.*)$", message_text, re.MULTILINE)
+    if not match:
+        return None
+
+    try:
+        payload_b64 = match.group(1)
+        payload_bytes = base64.b64decode(payload_b64)
+        payload_str = payload_bytes.decode("utf-8")
+        ticket_data = json.loads(payload_str)
+        return ticket_data
+    except Exception as e:
+        logger.error(f"Failed to parse ticket data: {e}")
+        return None
 
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

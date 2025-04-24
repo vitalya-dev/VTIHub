@@ -46,7 +46,7 @@ WEB_APP_URLS = {
 }
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
-IRFANVIEW_PATH = "i_view64"
+IRFANVIEW_PATH = "./i_view64"
 
 # --- Logging Setup ---
 logging.basicConfig(

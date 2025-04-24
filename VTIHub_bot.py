@@ -317,7 +317,7 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # 4️⃣ Helpers (unchanged) …
     def mm2px(mm: float) -> int:
         return int(mm * MM2IN * DPI)
-    def draw_line(txt: str, font, x: int, y: int) -> int:
+    def draw_line(txt: str, font: ImageFont.FreeTypeFont, x: int, y: int) -> int:
         draw.text((x, y), txt, font=font, fill="black")
         a, d = font.getmetrics()
         return y + a + d + 4  # give a bit more leading
@@ -327,9 +327,9 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     icon_sz = mm2px(12)
     # — Load, resize and paste your logo instead of drawing a blank rectangle —
     logo = Image.open("./logo.png").convert("RGBA")
-    logo = logo.resize((icon_sz, icon_sz))
-    img.paste(logo, (margin, margin + mm2px(1)), logo)
-    draw.rectangle([margin, margin + mm2px(1), margin+icon_sz, margin+mm2px(1)+icon_sz], outline="black", width=2)
+    #logo = logo.resize((icon_sz, icon_sz))
+    img.paste(logo, (margin, margin), logo)
+    draw.rectangle([margin, margin, margin+icon_sz, margin+icon_sz], outline="black", width=2)
     x0 = margin + icon_sz + mm2px(1)
     y0 = margin
     y0 = draw_line("ООО «ВТИ»", font_header, x0, y0)
@@ -348,12 +348,34 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
     y1 = draw_line(f"Телефон: {phone}",                font_body, x1, y1)
     y1 = draw_line(f"Время: {timestamp}",              font_body, x1, y1)
 
+
+        # ─── ASCII-art light-bulb ──────────────────────────
+    ascii_bulb = """
+     :
+ '.  _  .'
+-=  (~)  =-  
+ .'  #  '.
+    """.splitlines()
+
+    # compute widest line in px so we right-align
+    max_w = max(font_body.getlength(line) for line in ascii_bulb)
+    art_x = W_PX - margin - max_w
+    # start at the same Y as our first body-line
+    art_y = banner_h + mm2px(2)
+    ascent, descent = font_small.getmetrics()
+    line_h = ascent
+    for line in ascii_bulb:
+        draw.text((art_x, art_y), line, font=font_body, fill="black")
+        art_y += line_h
+    # ───────────────────────────────────────────────────
+
     # 7️⃣ Description
     y1 += mm2px(1)
     y1 = draw_line("Описание:", font_body, x1, y1)
     # wrap narrower now that text is larger
     for line in textwrap.wrap(description, width=28):
         y1 = draw_line(line, font_small, x1, y1)
+
 
 
     # ➡️ Empty commentary box at bottom‑right

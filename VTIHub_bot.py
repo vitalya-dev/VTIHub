@@ -46,7 +46,6 @@ WEB_APP_URLS = {
 }
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
-IRFANVIEW_PATH = "i_view64"
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -282,10 +281,14 @@ LABEL_WIDTH_PX = int(LABEL_WIDTH_MM * MM2IN * DPI)
 LABEL_HEIGHT_PX = int(LABEL_HEIGHT_MM * MM2IN * DPI)
 
 # Paths
-FONT_DIR = "./fonts/terminus-ttf-4.49.3/"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Get directory where the script is
+FONT_DIR = os.path.join(SCRIPT_DIR, "fonts", "terminus-ttf-4.49.3")
 FONT_BOLD_PATH = os.path.join(FONT_DIR, "TerminusTTF-Bold-4.49.3.ttf")
-LOGO_PATH = "./logo.png"
-OUTPUT_DIR = "./labels"
+LOGO_PATH = os.path.join(SCRIPT_DIR, "logo.png")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "labels")
+IRFANVIEW_EXECUTABLE_NAME = "i_view64.exe"
+IRFANVIEW_ABS_PATH = os.path.join(SCRIPT_DIR, IRFANVIEW_EXECUTABLE_NAME)
+
 
 # Font Sizes
 FONT_SIZE_HEADER = 28
@@ -307,7 +310,7 @@ BORDER_WIDTH = 2
 
 # Telegram Messages
 MSG_GENERATING = "🖨️"
-MSG_SUCCESS = "✅ Label generated!" # Changed from "printed" as it only generates
+MSG_SUCCESS = "✅ Этикетка сгенерирована!" # Changed from "printed" as it only generates
 MSG_ERR_NO_DATA = "❌ Ticket data not found in the message."
 MSG_ERR_DECODE = "❌ Failed to decode ticket data."
 MSG_ERR_GENERIC = "❌ An error occurred while generating the label."
@@ -489,14 +492,18 @@ def _save_label_image(
     safe_user = re.sub(r"\W+", "_", user_identifier)
     timestamp_safe = timestamp.replace(" ", "_").replace(":", "-")
     file_name = f"label_{safe_user}_{timestamp_safe}.png"
-    file_path = os.path.join(output_dir, file_name)
+    # Use os.path.join for cross-platform path construction
+    relative_file_path = os.path.join(output_dir, file_name)
+    # Get absolute path immediately for consistency
+    absolute_file_path = os.path.abspath(relative_file_path)
+
 
     try:
-        image.save(file_path, format="PNG", dpi=dpi)
-        logger.info(f"Label saved to disk at {file_path}")
-        return file_path
+        image.save(absolute_file_path, format="PNG", dpi=dpi)
+        logger.info(f"Label saved to disk at {absolute_file_path}")
+        return absolute_file_path
     except Exception as e:
-        logger.error(f"Failed to save image to {file_path}: {e}")
+        logger.error(f"Failed to save image to {absolute_file_path}: {e}")
         return None
 
 async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -538,33 +545,33 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
              # await query.message.reply_photo(photo=bio, caption=MSG_SUCCESS)
             return
         else:
-            # --- NEW: Convert relative path to absolute path ---
-            # This ensures i_view64 gets the full path regardless of working directory
-            absolute_file_path = os.path.abspath(file_path)
-            logger.info(f"Label image saved at relative path: {file_path}")
-            logger.info(f"Absolute path for printing: {absolute_file_path}")
+            logger.info(f"Label image saved at: {file_path}")
 
          # --- NEW: Attempt Printing ---
         printer_name = context.bot_data.get('printer_name')
-        if printer_name and absolute_file_path:
+        if printer_name and file_path:
             logger.info(f"Printer name '{printer_name}' provided. Attempting to print {file_path}")
+            print_arg = f'/print="{printer_name}"'
             print_command = [
-                    IRFANVIEW_PATH,
-                    absolute_file_path,
-                    f"/print={printer_name}" # Or try f'/print="{printer_name}"' if this fails
+                    IRFANVIEW_ABS_PATH,
+                    file_path,
+                    print_arg # Or try f'/print="{printer_name}"' if this fails
                 ]
             logger.info(f"Executing print command: {' '.join(print_command)}")
             result = subprocess.run(
                         print_command,
-                        check=True,         # Raise error if IrfanView returns non-zero exit code
+                        check=False,         # Raise error if IrfanView returns non-zero exit code
                         capture_output=True,# Capture stdout/stderr
                         text=True,          # Decode stdout/stderr as text
-                        timeout=30          # Add a timeout (e.g., 30 seconds)
+                        timeout=30,          # Add a timeout (e.g., 30 seconds)
                     )
-            logger.info(f"IrfanView print command successful for {file_path}. Output: {result.stdout}")
+            if result.returncode == 0:
+                logger.info(f"IrfanView print command successful for {file_path}. Output: {result.stdout}")
+            else:
+                logger.error(f"IrfanView print command failed for {file_path}. Return Code: {result.returncode}. Stderr: {result.stderr}. Stdout: {result.stdout}")
 
     except Exception as e:
-        logger.exception("Unhandled error in handle_print_callback:{e}") # Log full traceback
+        logger.exception("Unhandled error in handle_print_callback") # Log full traceback
         await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
     finally:
         # Clean up the "Generating" message

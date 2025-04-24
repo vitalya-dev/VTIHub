@@ -304,7 +304,7 @@ BORDER_COLOR = "black"
 BORDER_WIDTH = 2
 
 # Telegram Messages
-MSG_GENERATING = "🖨️ Generating label..."
+MSG_GENERATING = "🖨️"
 MSG_SUCCESS = "✅ Label generated!" # Changed from "printed" as it only generates
 MSG_ERR_NO_DATA = "❌ Ticket data not found in the message."
 MSG_ERR_DECODE = "❌ Failed to decode ticket data."
@@ -366,159 +366,189 @@ def _parse_ticket_data(message_text: Optional[str]) -> Optional[dict[str, Any]]:
         logger.error(f"Failed to parse ticket data: {e}")
         return None
 
-
-async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the 'Print' button:
-      1. Parses base64 ticket data.
-      2. Renders a 58×40 mm PNG label at 203 dpi with:
-         – a header banner (small logo + company info)
-         – full-width body (Submitted by / Phone / Time)
-         – description at the bottom.
-      3. Sends the resulting image back into the chat.
-    """
-    query = update.callback_query
-    temp_msg = await query.message.reply_text("🖨️") #pyright: ignore
-
-    # 1️⃣ Decode the ticket payload
-    data_marker = "Encoded Data:"
-    text = query.message.text or "" #pyright: ignore
-    m = re.search(rf"^{re.escape(data_marker)}\s+(.*)$", text, re.MULTILINE)
-    if not m:
-        return await query.message.reply_text("❌ Ticket data not found.") #pyright: ignore
+def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
+    """Generates the label image based on ticket data."""
     try:
-        payload = base64.b64decode(m.group(1)).decode("utf-8")
-        ticket = json.loads(payload)
-    except Exception:
-        return await query.message.reply_text("❌ Failed to decode ticket data.")#pyright: ignore
+        fonts = _load_fonts()
+    except IOError:
+        return None # Font loading failed
 
-    phone           = ticket.get("p", "")
-    description     = ticket.get("d", "")
-    user_identifier = ticket.get("s", "")
-    timestamp       = ticket.get("t", "")
-
-   # 2️⃣ Canvas setup
-    MM2IN = 1.0 / 25.4
-    DPI   = 203
-    W_MM, H_MM = 58, 40
-    W_PX = int(W_MM * MM2IN * DPI)
-    H_PX = int(H_MM * MM2IN * DPI)
-    img = Image.new("RGB", (W_PX, H_PX), "white")
+    img = Image.new("RGB", (LABEL_WIDTH_PX, LABEL_HEIGHT_PX), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
-    # 3️⃣ Load larger TTF fonts
-    font_header = ImageFont.truetype("./fonts/terminus-ttf-4.49.3/TerminusTTF-Bold-4.49.3.ttf",   28)  # ↑ from 20 to 28
-    font_body   = ImageFont.truetype("./fonts/terminus-ttf-4.49.3/TerminusTTF-Bold-4.49.3.ttf", 18)  # ↑ from 14 to 18
-    font_small  = ImageFont.truetype("./fonts/terminus-ttf-4.49.3/TerminusTTF-Bold-4.49.3.ttf", 16)  # ↑ from 12 to 16
+    margin_px = mm2px(MARGIN_MM)
+    current_y = margin_px
 
-    # 4️⃣ Helpers (unchanged) …
-    def mm2px(mm: float) -> int:
-        return int(mm * MM2IN * DPI)
-    def draw_line(txt: str, font: ImageFont.FreeTypeFont, x: int, y: int) -> int:
-        draw.text((x, y), txt, font=font, fill="black")
-        a, d = font.getmetrics()
-        return y + a + d + 4  # give a bit more leading
+    # 1. Header
+    try:
+        logo = Image.open(LOGO_PATH).convert("RGBA")
+        logo_size_px = mm2px(LOGO_SIZE_MM)
+        # Optional: Resize logo if needed, maintaining aspect ratio
+        # logo.thumbnail((logo_size_px, logo_size_px), Image.Resampling.LANCZOS)
+        img.paste(logo, (margin_px, margin_px), logo) # Use logo as mask for transparency
+        # Draw border around logo area (optional)
+        # draw.rectangle([margin_px, margin_px, margin_px + logo_size_px, margin_px + logo_size_px], outline=BORDER_COLOR, width=BORDER_WIDTH)
 
-    # 5️⃣ Header banner
-    margin = mm2px(2)
-    icon_sz = mm2px(12)
-    # — Load, resize and paste your logo instead of drawing a blank rectangle —
-    logo = Image.open("./logo.png").convert("RGBA")
-    #logo = logo.resize((icon_sz, icon_sz))
-    img.paste(logo, (margin, margin), logo)
-    draw.rectangle([margin, margin, margin+icon_sz, margin+icon_sz], outline="black", width=2)
-    x0 = margin + icon_sz + mm2px(1)
-    y0 = margin
-    y0 = draw_line("ООО «ВТИ»", font_header, x0, y0)
-    y0 = draw_line("ул Советская 26, г. Керчь",  font_body,   x0, y0)
-    y0 = draw_line("+7 (978) 762‑8967",       font_body,   x0, y0)
-    y0 = draw_line("+7 (978) 010‑4949",       font_body,   x0, y0)
+        header_text_x = margin_px + logo_size_px + mm2px(1)
+        header_y = margin_px
+        header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
+        header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y)
+        header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y)
+        header_y = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y)
 
+        banner_height = max(margin_px + logo_size_px, header_y) + mm2px(1)
+        draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
+        current_y = banner_height + mm2px(2)
 
-    banner_h = max(margin + icon_sz, y0) + mm2px(1)
-    draw.line((0, banner_h, W_PX, banner_h), fill="black", width=2)
+    except FileNotFoundError:
+        logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo.")
+        # Adjust layout if logo is missing? Or draw placeholder?
+        # For now, just continue without it. Header text will start at margin_px.
+        header_text_x = margin_px
+        header_y = margin_px
+        header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
+        # ... rest of header lines ...
+        banner_height = header_y + mm2px(1) # Adjust banner height
+        draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
+        current_y = banner_height + mm2px(2)
+    except Exception as e:
+        logger.error(f"Error drawing header: {e}")
+        # Decide how to proceed: maybe draw a simpler header or return None
 
-    # 6️⃣ Full‑width body
-    y1 = banner_h + mm2px(2)
-    x1 = margin
-    y1 = draw_line(f"Принял(а): {user_identifier}", font_body, x1, y1)
-    y1 = draw_line(f"Телефон: {phone}",                font_body, x1, y1)
-    y1 = draw_line(f"Время: {timestamp}",              font_body, x1, y1)
+    # 2. Body
+    body_x = margin_px
+    body_y = current_y
+    body_y = _draw_text_line(draw, f"Принял(а): {ticket.get('s', 'N/A')}", fonts["body"], body_x, body_y)
+    body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["body"], body_x, body_y)
+    body_y = _draw_text_line(draw, f"Время: {ticket.get('t', 'N/A')}", fonts["body"], body_x, body_y)
 
-
-        # ─── ASCII-art light-bulb ──────────────────────────
+    # 3. ASCII Art (Optional) - Consider removing if not essential or making configurable
     ascii_bulb = """
      :
  '.  _  .'
--=  (~)  =-  
+-=  (~)  =-   
  .'  #  '.
     """.splitlines()
-
-    # compute widest line in px so we right-align
-    max_w = max(font_body.getlength(line) for line in ascii_bulb)
-    art_x = W_PX - margin - max_w
-    # start at the same Y as our first body-line
-    art_y = banner_h + mm2px(2)
-    ascent, descent = font_small.getmetrics()
-    line_h = ascent
-    for line in ascii_bulb:
-        draw.text((art_x, art_y), line, font=font_body, fill="black")
-        art_y += line_h
-    # ───────────────────────────────────────────────────
-
-    # 7️⃣ Description
-    y1 += mm2px(1)
-    y1 = draw_line("Описание:", font_body, x1, y1)
-    # wrap narrower now that text is larger
-    for line in textwrap.wrap(description, width=28):
-        y1 = draw_line(line, font_small, x1, y1)
+    if ascii_bulb:
+        try:
+            max_w = max(fonts["body"].getlength(line) for line in ascii_bulb)
+            art_x = LABEL_WIDTH_PX - margin_px - int(max_w)
+            art_y = current_y # Align with top of body text
+            ascent, _ = fonts["body"].getmetrics()
+            line_h = ascent # Use ascent for line height approx
+            for line in ascii_bulb:
+                # Center align text within its calculated max width? Or keep right align?
+                # current_line_width = fonts["body"].getlength(line)
+                # draw.text((art_x + (max_w - current_line_width) / 2, art_y), line, font=fonts["body"], fill=TEXT_COLOR)
+                draw.text((art_x, art_y), line, font=fonts["body"], fill=TEXT_COLOR)
+                art_y += line_h # Tighter spacing for art
+        except Exception as e:
+            logger.warning(f"Could not draw ASCII art: {e}")
 
 
+    # 4. Description
+    desc_y = body_y + mm2px(1) # Start description below body text
+    desc_y = _draw_text_line(draw, "Описание:", fonts["body"], body_x, desc_y)
+    description = ticket.get("d", "")
+    # Adjust wrap width based on available space and font size
+    # Approx chars = (Width_px - 2*margin_px) / avg_char_width
+    # avg_char_width for Terminus Bold 16 might be around 9-10px?
+    # wrap_width = (LABEL_WIDTH_PX - 2 * margin_px) // 9
+    wrap_width = 28 # Adjust this based on visual testing
+    for line in textwrap.wrap(description, width=wrap_width):
+        desc_y = _draw_text_line(draw, line, fonts["small"], body_x, desc_y)
 
-    # ➡️ Empty commentary box at bottom‑right
-    BOX_W_MM, BOX_H_MM = 20, 10
-    box_w = mm2px(BOX_W_MM)
-    box_h = mm2px(BOX_H_MM)
-
-    # bottom‑right corner, inset by your margin
-    x2 = W_PX - int(margin / 3) - box_w
-    y2 = H_PX - int(margin / 3) - box_h
-
-    # draw the empty rectangle
+    # 5. Commentary Box
+    box_w_px = mm2px(COMMENT_BOX_WIDTH_MM)
+    box_h_px = mm2px(COMMENT_BOX_HEIGHT_MM)
+    box_x = LABEL_WIDTH_PX - margin_px - box_w_px
+    box_y = LABEL_HEIGHT_PX - margin_px - box_h_px
+    box_radius = mm2px(COMMENT_BOX_RADIUS_MM)
     draw.rounded_rectangle(
-        [x2, y2, x2 + box_w, y2 + box_h],
-        radius=mm2px(1.5),         # adjust corner roundness here
-        outline="black",
-        width=2
-    )
+        [box_x, box_y, box_x + box_w_px, box_y + box_h_px],
+        radius=box_radius,
+        outline=BORDER_COLOR,
+        width=BORDER_WIDTH
+    )   
+    return img
 
-    #img = img.resize((W_PX * 4, H_PX * 4), Image.Resampling.NEAREST)
-
-    # — ensure output directory exists
-    output_dir = "./labels"
+def _save_label_image(
+    image: Image.Image,
+    ticket: Dict[str, Any],
+    output_dir: str = OUTPUT_DIR,
+    dpi: Tuple[int, int] = (DPI, DPI)
+) -> Optional[str]:
+    """Saves the image to a file and returns the path."""
     os.makedirs(output_dir, exist_ok=True)
 
-    # — build a filename (you can customize this pattern)
-    safe_user = re.sub(r"\W+", "_", user_identifier)  # make username filesystem-safe
+    user_identifier = ticket.get("s", "unknown_user")
+    timestamp = ticket.get("t", "unknown_time")
+
+    safe_user = re.sub(r"\W+", "_", user_identifier)
     timestamp_safe = timestamp.replace(" ", "_").replace(":", "-")
     file_name = f"label_{safe_user}_{timestamp_safe}.png"
     file_path = os.path.join(output_dir, file_name)
 
-    # — save the image
-    img.save(file_path, format="PNG", dpi=(DPI, DPI))
-    logger.info(f"Label saved to disk at {file_path}")
+    try:
+        image.save(file_path, format="PNG", dpi=dpi)
+        logger.info(f"Label saved to disk at {file_path}")
+        return file_path
+    except Exception as e:
+        logger.error(f"Failed to save image to {file_path}: {e}")
+        return None
 
-    #  ➡️ delete our “🖨️ Generating” message
-    await context.bot.delete_message(
-        chat_id=temp_msg.chat.id,
-        message_id=temp_msg.message_id
-    )
-    # finally, send the print notification
-    await query.answer("✅ Этикетка напечатана!")
+async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles the 'Print' button callback to generate and save a label image.
+    """
+    query = update.callback_query
+    if not query or not query.message:
+        logger.warning("Received callback query without query or message.")
+        return
 
+    # Acknowledge callback quickly
+    await query.answer()
 
+    temp_msg = await query.message.reply_text(MSG_GENERATING) #pyright: ignore
 
+    try:
+        # 1. Parse Data
+        ticket_data = _parse_ticket_data(query.message.text) #pyright: ignore
+        if ticket_data is None:
+            await query.message.reply_text(MSG_ERR_NO_DATA if not query.message.text or DATA_MARKER not in query.message.text else MSG_ERR_DECODE) #pyright: ignore
+            return
 
+        # 2. Generate Image
+        label_image = _generate_label_image(ticket_data)
+        if label_image is None:
+            await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
+            return
+
+        # 3. Save Image (Optional: Send directly without saving)
+        file_path = _save_label_image(label_image, ticket_data)
+        if file_path is None:
+             await query.message.reply_text("❌ Failed to save the label image.") #pyright: ignore
+             # Optionally still send the image even if saving failed:
+             # bio = BytesIO()
+             # bio.name = 'label.png'
+             # label_image.save(bio, 'PNG')
+             # bio.seek(0)
+             # await query.message.reply_photo(photo=bio, caption=MSG_SUCCESS)
+             return
+
+    except Exception as e:
+        logger.exception("Unhandled error in handle_print_callback:") # Log full traceback
+        await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
+    finally:
+        # Clean up the "Generating" message
+        if temp_msg:
+            try:
+                await context.bot.delete_message(
+                    chat_id=temp_msg.chat.id,
+                    message_id=temp_msg.message_id
+                )
+            except Exception as e:
+                logger.warning(f"Failed to delete temporary message: {e}")
 
 
 

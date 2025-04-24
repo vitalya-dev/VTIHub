@@ -426,7 +426,7 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     ascii_bulb = """
      :
  '.  _  .'
--=  (~)  =-   
+-=  (~)  =-
  .'  #  '.
     """.splitlines()
     if ascii_bulb:

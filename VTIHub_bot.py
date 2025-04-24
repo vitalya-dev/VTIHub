@@ -537,6 +537,12 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
              # bio.seek(0)
              # await query.message.reply_photo(photo=bio, caption=MSG_SUCCESS)
             return
+        else:
+            # --- NEW: Convert relative path to absolute path ---
+            # This ensures i_view64 gets the full path regardless of working directory
+            absolute_file_path = os.path.abspath(file_path)
+            logger.info(f"Label image saved at relative path: {file_path}")
+            logger.info(f"Absolute path for printing: {absolute_file_path}")
 
          # --- NEW: Attempt Printing ---
         printer_name = context.bot_data.get('printer_name')

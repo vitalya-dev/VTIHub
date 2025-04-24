@@ -547,7 +547,7 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
                     file_path,
                     f"/print={printer_name}" # Or try f'/print="{printer_name}"' if this fails
                 ]
-            logger.debug(f"Executing print command: {' '.join(print_command)}")
+            logger.info(f"Executing print command: {' '.join(print_command)}")
             result = subprocess.run(
                         print_command,
                         check=True,         # Raise error if IrfanView returns non-zero exit code

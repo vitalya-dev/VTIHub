@@ -551,7 +551,7 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
         printer_name = context.bot_data.get('printer_name')
         if printer_name and file_path:
             logger.info(f"Printer name '{printer_name}' provided. Attempting to print {file_path}")
-            print_arg = f'/print="{printer_name}"'
+            print_arg = f'/print={printer_name}'
             print_command = [
                     IRFANVIEW_ABS_PATH,
                     file_path,

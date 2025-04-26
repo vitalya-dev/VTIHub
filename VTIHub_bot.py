@@ -47,11 +47,7 @@ WEB_APP_URLS = {
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
 
-# --- Logging Setup ---
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=INFO
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 # --- Bot Setup Functions ---
@@ -544,8 +540,6 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
              # bio.seek(0)
              # await query.message.reply_photo(photo=bio, caption=MSG_SUCCESS)
             return
-        else:
-            logger.info(f"Label image saved at: {file_path}")
 
          # --- NEW: Attempt Printing ---
         printer_name = context.bot_data.get('printer_name')
@@ -632,7 +626,30 @@ if __name__ == "__main__":
         default=None, # Default is no printing
         help='Specify the network printer name for IrfanView printing (e.g., "MyPrinter" or "\\\\Server\\PrinterShare")'
     )
+    parser.add_argument('--log-file', help='Path to log file (logs to console if omitted)')
+    parser.add_argument('--log-level', default='INFO', 
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the logging level')
     args = parser.parse_args()
+
+     # --- Configure Log Path ---
+    if args.log_file:
+        # Create full path relative to script directory
+        log_path = os.path.join(SCRIPT_DIR, args.log_file)
+        # Create parent directories if needed
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    else:
+        log_path = None
+
+    # --- Logging Setup ---
+    logging.basicConfig(
+        filename=log_path,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=getattr(logging, args.log_level.upper())
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
 
     logger.info("Starting bot...")
 

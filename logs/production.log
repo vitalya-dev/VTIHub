@@ -1,0 +1,9 @@
+2025-04-26 08:21:41,648 - __main__ - INFO - Starting bot...
+2025-04-26 08:21:41,696 - __main__ - INFO - No printer name specified. Printing via IrfanView is disabled.
+2025-04-26 08:21:41,696 - __main__ - INFO - Bot started and polling for updates...
+2025-04-26 08:21:42,233 - __main__ - INFO - Bot commands set.
+2025-04-26 08:21:42,468 - __main__ - INFO - Menu button set to show commands.
+2025-04-26 08:21:42,468 - __main__ - INFO - Post-initialization setup complete.
+2025-04-26 08:21:42,556 - telegram.ext.Application - INFO - Application started
+2025-04-26 08:21:51,601 - telegram.ext.Application - INFO - Application is stopping. This might take a moment.
+2025-04-26 08:21:51,602 - telegram.ext.Application - INFO - Application.stop() complete

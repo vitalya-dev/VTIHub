@@ -68,6 +68,13 @@
           font-size: 14px;
         }
 
+        .hint {
+          color: var(--tg-theme-hint-color, #666);
+          font-size: 12px;
+          margin: -5px 0 8px 0;
+          line-height: 1.4;
+        }
+
         input[type="tel"],
         textarea {
           width: 100%;
@@ -154,9 +161,10 @@
 
         <div class="input-group">
           <label for="description">💬 Описание Проблемы</label>
+          <div class="hint">Модель техники, характер неисправности, комплектация и другие детали</div>
           <textarea
               id="description"
-              placeholder="Опишите проблему..."
+              placeholder="Например: Lenovo IdeaPad 5. Не заряжается. Блок питания. Сумка"
               inputmode="text"
               enterkeyhint="done"
               autocapitalize="sentences"

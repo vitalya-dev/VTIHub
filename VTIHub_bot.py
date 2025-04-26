@@ -549,7 +549,8 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
                     IRFANVIEW_ABS_PATH,
                     file_path,
                     f'/print={printer_name}',
-                    f'/dpi=({DPI},{DPI})'
+                    f'/dpi=({DPI},{DPI})',
+                    f'/ini={SCRIPT_DIR}'
                 ]
             logger.info(f"Executing print command: {' '.join(print_command)}")
             result = subprocess.run(

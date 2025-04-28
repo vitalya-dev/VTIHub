@@ -388,6 +388,34 @@ def _parse_ticket_data(message_text: Optional[str]) -> Optional[dict[str, Any]]:
         logger.error(f"Failed to parse ticket data: {e}")
         return None
 
+def format_identifier_partial(identifier: str, keep_chars: int = 4, remove_leading_at: bool = False) -> str:
+    """
+    Formats an identifier for display by keeping the first few characters
+    and adding an ellipsis (...) if truncated. Optionally removes leading '@'.
+
+    Args:
+        identifier: The identifier string (e.g., "@vitalya_dev", "employee123").
+        keep_chars: The number of initial characters to keep visible.
+        remove_leading_at: If True, removes a leading '@' before processing.
+
+    Returns:
+        The formatted identifier string (e.g., "vita...", "user", "N/A").
+    """
+    if not identifier or identifier == 'N/A':
+        return 'N/A'
+
+    display_name = str(identifier) # Ensure it's a string
+
+    if remove_leading_at and display_name.startswith('@'):
+        display_name = display_name[1:]
+
+    if len(display_name) > keep_chars:
+        return display_name[:keep_chars] + '...'
+    else:
+        # If the name is short enough, display it fully (without ellipsis)
+        return display_name
+
+
 def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     """Generates the label image based on ticket data."""
     try:
@@ -440,7 +468,9 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     # 2. Body
     body_x = margin_px
     body_y = current_y
-    body_y = _draw_text_line(draw, f"Принял(а): {ticket.get('s', 'N/A')}", fonts["body"], body_x, body_y)
+    raw_identifier = ticket.get('s', 'N/A')
+    display_identifier = format_identifier_partial(raw_identifier, keep_chars=6)
+    body_y = _draw_text_line(draw, f"Принял(а): {display_identifier}", fonts["body"], body_x, body_y)
     body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["body"], body_x, body_y)
     body_y = _draw_text_line(draw, f"Время: {ticket.get('t', 'N/A')}", fonts["body"], body_x, body_y)
 

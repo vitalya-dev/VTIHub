@@ -672,4 +672,4 @@ if __name__ == "__main__":
     application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_encoded$"))
 
     logger.info("Bot started and polling for updates...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

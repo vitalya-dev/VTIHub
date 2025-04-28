@@ -205,40 +205,77 @@
       // --- Rest of your JavaScript (validation, sendData, goBack) remains the same ---
 
       function validatePhone(phone) {
-        const phoneRegex = /^[+]?[0-9\s-]*$/;
-        return phone.trim() !== '' && phoneRegex.test(phone);
+        const trimmedPhone = phone.trim(); // Trim whitespace just in case
+
+        if (trimmedPhone === '') {
+            return { isValid: false, message: 'Пожалуйста, введите номер телефона.' };
+        }
+
+        // Regex Explained:
+        // ^       - Anchor to the start of the string
+        // (       - Start of group 1
+        //   8     - Match the digit 8 literally
+        //   \d{10} - Match exactly 10 digits (0-9)
+        // )       - End of group 1
+        // |       - OR
+        // (       - Start of group 2
+        //   \+7   - Match the characters +7 literally (\+ escapes the special '+' meaning)
+        //   \d{10} - Match exactly 10 digits (0-9)
+        // )       - End of group 2
+        // $       - Anchor to the end of the string
+        // This ensures the entire string matches *only* one of these two patterns.
+        const specificFormatRegex = /^(8\d{10}|\+7\d{10})$/;
+
+        if (specificFormatRegex.test(trimmedPhone)) {
+            // The phone number matches either 8XXXXXXXXXX or +7XXXXXXXXXX format
+            return { isValid: true, message: '' };
+        } else {
+            // The phone number does not match the required format
+            return { isValid: false, message: 'Неверный формат. Номер должен быть вида 8XXXXXXXXXX или +7XXXXXXXXXX (без пробелов и дефисов).' };
+        }
       }
+
 
       function validateDescription(description) {
         return description.trim() !== '';
       }
 
       function sendData() {
-        const phone = document.getElementById('phone').value;
-        const description = document.getElementById('description').value;
+        const phoneInput = document.getElementById('phone');
+        const descriptionInput = document.getElementById('description');
         const errorMessage = document.getElementById('error-message');
 
-        errorMessage.textContent = '';
+        const phone = phoneInput.value;
+        const description = descriptionInput.value;
 
-        if (!validatePhone(phone)) {
-          errorMessage.textContent = 'Пожалуйста, введите корректный номер телефона.';
-          return;
+        errorMessage.textContent = ''; // Clear previous errors
+
+        // Validate Phone using the new strict function
+        const phoneValidationResult = validatePhone(phone);
+        if (!phoneValidationResult.isValid) {
+            errorMessage.textContent = phoneValidationResult.message;
+            phoneInput.focus(); // Optional: Focus the input field with the error
+            return;
         }
+
+        // Validate Description
         if (!validateDescription(description)) {
-          errorMessage.textContent = 'Пожалуйста, введите описание проблемы.';
-          return;
+            errorMessage.textContent = 'Пожалуйста, введите описание проблемы.';
+            descriptionInput.focus(); // Optional: Focus the input field
+            return;
         }
 
+        // Check if Telegram Web App is available (keep this check)
         if (typeof Telegram === 'undefined' || !Telegram.WebApp) {
-          errorMessage.textContent = 'Веб-приложение Telegram недоступно.';
-          // Optionally display a non-themed error here
-          return;
+            errorMessage.textContent = 'Веб-приложение Telegram недоступно.';
+            return;
         }
 
+        // Prepare and send data (keep this part)
         const data = {
-          phone: phone,
-          description: description,
-          app_origin: 'ticket_app'
+            phone: phone, // Send the original input value
+            description: description,
+            app_origin: 'ticket_app'
         };
         Telegram.WebApp.sendData(JSON.stringify(data));
         Telegram.WebApp.close();

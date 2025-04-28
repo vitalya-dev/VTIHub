@@ -27,7 +27,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup
 )
-from telegram.constants import ChatMemberStatus
+from telegram.constants import ChatMemberStatus, ParseMode
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -169,6 +169,25 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
     phone = data.get('phone', 'N/A')
     description = data.get('description', 'No description provided.')
 
+    # --- Format phone number for tel: link and display ---
+    phone_link_html = phone # Default to original text if sanitization fails or N/A
+    if phone and phone != 'N/A':
+        # Remove all non-digit characters for the tel: link
+        sanitized_phone_for_link = re.sub(r'\D', '', phone)
+        if sanitized_phone_for_link:
+            # Ensure it starts with '+' if it seems like an international number (e.g., Russian)
+            # This logic might need adjustment based on expected number formats
+            if len(sanitized_phone_for_link) == 11 and sanitized_phone_for_link.startswith('8'):
+                 sanitized_phone_for_link = '7' + sanitized_phone_for_link[1:] # Replace 8 with 7
+
+            if not sanitized_phone_for_link.startswith('+'):
+                 sanitized_phone_for_link = '+' + sanitized_phone_for_link # Add + if missing
+
+            tel_url = f"tel:{sanitized_phone_for_link}"
+            # Use HTML: create a clickable link with the original phone text highlighted with <code>
+            phone_link_html = f'<a href="{tel_url}"><b><code>{phone}</code></b></a>'
+
+
     # Generate search hints
     search_hints = ""
     if phone and phone != 'N/A':
@@ -213,7 +232,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
                 f"👤 Отправил(а): {user_identifier}\n"
                 f"🕒 Время: {current_time}\n"
                 f"--- Детали заявки ---\n"
-                f"📞 Телефон: {phone} (Поиск: {search_hints})\n"
+                f"📞 Телефон: {phone_link_html} (Поиск: {search_hints})\n"
                 f"📝 Описание: {description}\n\n"
                 f"{data_marker} {base64_encoded_json}\n\n"
             )
@@ -222,6 +241,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
                 chat_id=TARGET_CHANNEL_ID,
                 text=channel_message_text,
                 reply_markup=keyboard,
+                parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True
             )
             logger.info(f"Ticket posted to channel {TARGET_CHANNEL_ID}")
@@ -248,7 +268,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
             f"👤 Отправил(а): {user_identifier}\n"
             f"🕒 Время: {current_time}\n"
             f"--- Детали заявки ---\n"
-            f"📞 Телефон: {phone} (Поиск: {search_hints})\n"
+            f"📞 Телефон: {phone_link_html} (Поиск: {search_hints})\n"
             f"📝 Описание: {description}\n\n"
             f"{data_marker} {base64_encoded_json}\n\n"
             f"🔗 [Посмотреть вашу заявку в канале]({message_link})\n\n"
@@ -256,6 +276,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(
             text=user_message_text,
             reply_markup=keyboard,
+            parse_mode=ParseMode.HTML,
             disable_web_page_preview=True
         )
         logger.info(f"Confirmation message sent to user {user_identifier} ({user.id})")

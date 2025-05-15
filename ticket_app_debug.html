@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Приложение Заявок - Новая Заявка</title>
+    <style>
+/* :root definition is no longer strictly needed for these colors,
+   but kept here for clarity on the original design intent or potential future use.
+   The actual styling now uses Telegram variables with fallbacks. */
+:root {
+  --original-primary-color: #2481d7;
+  --original-secondary-color: #e5e5ea;
+  --original-text-color: #1a1a1a;
+  --original-label-color: #666;
+  --original-background-color: #f0f2f5;
+  --original-white: #ffffff;
+  --original-border-color: #ddd;
+  --original-destructive-color: red;
+}
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          /* Use Telegram background and text colors with fallbacks */
+          background-color: var(--tg-theme-bg-color, var(--original-background-color));
+          color: var(--tg-theme-text-color, var(--original-text-color));
+          margin: 0;
+          padding: 20px;
+          display: flex;
+          justify-content: center;
+          /* Ensure safe area insets are handled on iOS */
+          padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+          padding-left: calc(env(safe-area-inset-left, 0px) + 20px);
+          padding-right: calc(env(safe-area-inset-right, 0px) + 20px);
+          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+          box-sizing: border-box; /* Include padding in height/width */
+          min-height: 100vh; /* Ensure body takes full viewport height */
+        }
+
+        .ticket-container {
+          /* Use Telegram secondary background color for the container */
+          background: var(--tg-theme-secondary-bg-color, var(--original-white));
+          border-radius: 12px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Keep shadow subtle */
+          padding: 20px;
+          width: 100%;
+          max-width: 400px;
+          box-sizing: border-box;
+        }
+
+        .header {
+          font-size: 20px;
+          font-weight: 500;
+          margin-bottom: 20px;
+          /* Header text uses main text color */
+          color: var(--tg-theme-text-color, var(--original-text-color));
+        }
+
+        .input-group {
+          margin-bottom: 20px;
+        }
+
+        label {
+          display: block;
+          margin-bottom: 8px;
+          /* Use Telegram hint color for labels */
+          color: var(--tg-theme-hint-color, var(--original-label-color));
+          font-size: 14px;
+        }
+
+        .hint {
+          color: var(--tg-theme-hint-color, #666);
+          font-size: 12px;
+          margin: -5px 0 8px 0;
+          line-height: 1.4;
+        }
+
+        input[type="tel"],
+        textarea {
+          width: 100%;
+          padding: 12px;
+          /* Use hint color for border, match container bg */
+          border: 1px solid var(--tg-theme-hint-color, var(--original-border-color));
+          background-color: var(--tg-theme-secondary-bg-color, var(--original-white)); /* Match container or use bg_color? secondary seems better */
+          color: var(--tg-theme-text-color, var(--original-text-color)); /* Input text color */
+          border-radius: 8px;
+          font-size: 16px;
+          box-sizing: border-box;
+          font-family: inherit;
+        }
+
+        /* Style placeholder text */
+        input[type="tel"]::placeholder,
+      textarea::placeholder {
+        color: var(--tg-theme-hint-color, #999); /* Use hint color for placeholder */
+        opacity: 1; /* Override default lighter opacity */
+      }
+
+      textarea {
+        height: 120px;
+        resize: vertical;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      button {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+
+      button:active {
+        opacity: 0.7;
+      }
+
+      .cancel-btn {
+        /* Secondary/Cancel button uses secondary bg and main text color */
+        background-color: var(--tg-theme-secondary-bg-color, var(--original-secondary-color));
+        color: var(--tg-theme-text-color, var(--original-text-color));
+        /* Optionally add a subtle border if secondary bg is same as container */
+        border: 1px solid var(--tg-theme-hint-color, transparent);
+      }
+
+      .send-btn {
+        /* Primary button uses Telegram button colors */
+        background-color: var(--tg-theme-button-color, var(--original-primary-color));
+        color: var(--tg-theme-button-text-color, var(--original-white));
+      }
+
+      .error-message {
+        /* Use Telegram destructive text color for errors */
+        color: var(--tg-theme-destructive-text-color, var(--original-destructive-color));
+        font-size: 14px;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ticket-container">
+      <div class="header">➕ Новая Заявка</div>
+
+      <div class="input-group">
+        <label for="phone">📞 Телефон Клиента</label>
+        <input
+            type="tel"
+            id="phone"
+            inputmode="tel"
+            placeholder="Введите номер телефона"
+            enterkeyhint="next"
+            aria-label="Телефон клиента"
+            >
+      </div>
+
+        <div class="input-group">
+          <label for="description">💬 Описание Проблемы</label>
+          <div class="hint">Модель техники, характер неисправности, комплектация и другие детали</div>
+          <textarea
+              id="description"
+              placeholder="Например: Lenovo IdeaPad 5. Не заряжается. Блок питания. Сумка"
+              inputmode="text"
+              enterkeyhint="done"
+              autocapitalize="sentences"
+              spellcheck="true"
+              data-gramm="false"
+              aria-label="Описание проблемы"
+              ></textarea>
+        </div>
+
+        <div class="button-group">
+          <button class="cancel-btn" onclick="goBack()" aria-label="Отмена">Отмена</button>
+          <button class="send-btn" onclick="sendData()" aria-label="Отправить">Отправить</button>
+        </div>
+
+        <div id="error-message" class="error-message"></div>
+    </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      // Initialize Telegram Web App interactions
+      if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+        Telegram.WebApp.ready(); // Signal that the app is ready
+
+        // Optional: Adjust header color if available and needed
+        // Telegram.WebApp.setHeaderColor(Telegram.WebApp.themeParams.secondary_bg_color || '#ffffff');
+
+        // Optional: Listen for theme changes dynamically if needed
+        // Although CSS variables update automatically, you might want to react in JS
+        Telegram.WebApp.onEvent('themeChanged', function() {
+          // Example: You could re-apply styles via JS if needed,
+          // but usually just using CSS variables is sufficient.
+          console.log('Theme changed:', Telegram.WebApp.themeParams);
+          // Maybe adjust something not purely CSS-driven
+        });
+      }
+
+
+      // --- Rest of your JavaScript (validation, sendData, goBack) remains the same ---
+
+      function validatePhone(phone) {
+        const trimmedPhone = phone.trim(); // Trim whitespace just in case
+
+        if (trimmedPhone === '') {
+            return { isValid: false, message: 'Пожалуйста, введите номер телефона.' };
+        }
+
+        // Regex Explained:
+        // ^       - Anchor to the start of the string
+        // (       - Start of group 1
+        //   8     - Match the digit 8 literally
+        //   \d{10} - Match exactly 10 digits (0-9)
+        // )       - End of group 1
+        // |       - OR
+        // (       - Start of group 2
+        //   \+7   - Match the characters +7 literally (\+ escapes the special '+' meaning)
+        //   \d{10} - Match exactly 10 digits (0-9)
+        // )       - End of group 2
+        // $       - Anchor to the end of the string
+        // This ensures the entire string matches *only* one of these two patterns.
+        const specificFormatRegex = /^(8\d{10}|\+7\d{10})$/;
+
+        if (specificFormatRegex.test(trimmedPhone)) {
+            // The phone number matches either 8XXXXXXXXXX or +7XXXXXXXXXX format
+            return { isValid: true, message: '' };
+        } else {
+            // The phone number does not match the required format
+            return { isValid: false, message: 'Неверный формат. Номер должен быть вида 8XXXXXXXXXX или +7XXXXXXXXXX (без пробелов и дефисов).' };
+        }
+      }
+
+
+      function validateDescription(description) {
+        return description.trim() !== '';
+      }
+
+      function sendData() {
+        const phoneInput = document.getElementById('phone');
+        const descriptionInput = document.getElementById('description');
+        const errorMessage = document.getElementById('error-message');
+
+        const phone = phoneInput.value;
+        const description = descriptionInput.value;
+
+        errorMessage.textContent = ''; // Clear previous errors
+
+        // Validate Phone using the new strict function
+        const phoneValidationResult = validatePhone(phone);
+        if (!phoneValidationResult.isValid) {
+            errorMessage.textContent = phoneValidationResult.message;
+            phoneInput.focus(); // Optional: Focus the input field with the error
+            return;
+        }
+
+        // Validate Description
+        if (!validateDescription(description)) {
+            errorMessage.textContent = 'Пожалуйста, введите описание проблемы.';
+            descriptionInput.focus(); // Optional: Focus the input field
+            return;
+        }
+
+        // Check if Telegram Web App is available (keep this check)
+        if (typeof Telegram === 'undefined' || !Telegram.WebApp) {
+            errorMessage.textContent = 'Веб-приложение Telegram недоступно.';
+            return;
+        }
+
+        // Prepare and send data (keep this part)
+        const data = {
+            phone: phone, // Send the original input value
+            description: description,
+            app_origin: 'ticket_app'
+        };
+        Telegram.WebApp.sendData(JSON.stringify(data));
+        Telegram.WebApp.close();
+      }
+
+      function goBack() {
+        if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+          Telegram.WebApp.close();
+        } else {
+          // Provide a fallback for non-Telegram environments
+          try {
+            window.history.back();
+          } catch (e) {
+            console.error("Cannot go back:", e);
+            // Maybe disable the button or show a message if history.back fails
+          }
+        }
+      }
+
+      // Optional: Tell Telegram the main button is visible and clickable
+      // Do this only if the 'Send' button should act like the main bot button
+      // if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+      //     Telegram.WebApp.MainButton.setText('Отправить');
+      //     Telegram.WebApp.MainButton.textColor = Telegram.WebApp.themeParams.button_text_color || '#ffffff';
+      //     Telegram.WebApp.MainButton.color = Telegram.WebApp.themeParams.button_color || '#2481d7';
+      //     Telegram.WebApp.MainButton.show();
+      //     Telegram.WebApp.MainButton.onClick(sendData);
+      //     // If using the MainButton, you might hide your .send-btn
+      //     // document.querySelector('.send-btn').style.display = 'none';
+      //     // You might also need to adjust the .cancel-btn width if .send-btn is hidden
+      // }
+
+    </script>
+  </body>
+</html>
+
+

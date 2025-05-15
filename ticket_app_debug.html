@@ -5,142 +5,192 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Приложение Заявок - Новая Заявка</title>
     <style>
-/* :root definition is no longer strictly needed for these colors,
-   but kept here for clarity on the original design intent or potential future use.
-   The actual styling now uses Telegram variables with fallbacks. */
-:root {
-  --original-primary-color: #2481d7;
-  --original-secondary-color: #e5e5ea;
-  --original-text-color: #1a1a1a;
-  --original-label-color: #666;
-  --original-background-color: #f0f2f5;
-  --original-white: #ffffff;
-  --original-border-color: #ddd;
-  --original-destructive-color: red;
-}
+      /* :root definition is no longer strictly needed for these colors,
+         but kept here for clarity on the original design intent or potential future use.
+         The actual styling now uses Telegram variables with fallbacks. */
+      :root {
+        --original-primary-color: #2481d7;
+        --original-secondary-color: #e5e5ea;
+        --original-text-color: #1a1a1a;
+        --original-label-color: #666;
+        --original-background-color: #f0f2f5;
+        --original-white: #ffffff;
+        --original-border-color: #ddd;
+        --original-destructive-color: red;
+        /* Alpha version of button color for box-shadow, adjust as needed or use a fixed rgba */
+        --tg-theme-button-color-alpha: rgba(36, 129, 215, 0.2); 
+      }
 
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          /* Use Telegram background and text colors with fallbacks */
-          background-color: var(--tg-theme-bg-color, var(--original-background-color));
-          color: var(--tg-theme-text-color, var(--original-text-color));
-          margin: 0;
-          padding: 20px;
-          display: flex;
-          justify-content: center;
-          /* Ensure safe area insets are handled on iOS */
-          padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
-          padding-left: calc(env(safe-area-inset-left, 0px) + 20px);
-          padding-right: calc(env(safe-area-inset-right, 0px) + 20px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
-          box-sizing: border-box; /* Include padding in height/width */
-          min-height: 100vh; /* Ensure body takes full viewport height */
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        /* Use Telegram background and text colors with fallbacks */
+        background-color: var(--tg-theme-bg-color, var(--original-background-color));
+        color: var(--tg-theme-text-color, var(--original-text-color));
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        /* Ensure safe area insets are handled on iOS */
+        padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+        padding-left: calc(env(safe-area-inset-left, 0px) + 20px);
+        padding-right: calc(env(safe-area-inset-right, 0px) + 20px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+        box-sizing: border-box; /* Include padding in height/width */
+        min-height: 100vh; /* Ensure body takes full viewport height */
+      }
 
-        .ticket-container {
-          /* Use Telegram secondary background color for the container */
-          background: var(--tg-theme-secondary-bg-color, var(--original-white));
-          border-radius: 12px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Keep shadow subtle */
-          padding: 20px;
-          width: 100%;
-          max-width: 400px;
-          box-sizing: border-box;
-        }
+      .ticket-container {
+        /* Use Telegram secondary background color for the container */
+        background: var(--tg-theme-secondary-bg-color, var(--original-white));
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Keep shadow subtle */
+        padding: 20px;
+        width: 100%;
+        max-width: 400px;
+        box-sizing: border-box;
+      }
 
-        .header {
-          font-size: 20px;
-          font-weight: 500;
-          margin-bottom: 20px;
-          /* Header text uses main text color */
-          color: var(--tg-theme-text-color, var(--original-text-color));
-        }
+      .header {
+        font-size: 20px;
+        font-weight: 500;
+        margin-bottom: 20px;
+        /* Header text uses main text color */
+        color: var(--tg-theme-text-color, var(--original-text-color));
+      }
 
-        .input-group {
-          margin-bottom: 20px;
-        }
+      .input-group {
+        margin-bottom: 18px; /* Adjusted for new fields */
+      }
 
-        label {
-          display: block;
-          margin-bottom: 8px;
-          /* Use Telegram hint color for labels */
-          color: var(--tg-theme-hint-color, var(--original-label-color));
-          font-size: 14px;
-        }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        /* Use Telegram hint color for labels */
+        color: var(--tg-theme-hint-color, var(--original-label-color));
+        font-size: 14px;
+        font-weight: 500; /* Slightly bolder label */
+      }
 
-        .hint {
-          color: var(--tg-theme-hint-color, #666);
-          font-size: 12px;
-          margin: -5px 0 8px 0;
-          line-height: 1.4;
-        }
+      .hint {
+        color: var(--tg-theme-hint-color, #666);
+        font-size: 12px;
+        margin-top: -4px; /* Adjusted based on label margin */
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
 
-        input[type="tel"],
-        textarea {
-          width: 100%;
-          padding: 12px;
-          /* Use hint color for border, match container bg */
-          border: 1px solid var(--tg-theme-hint-color, var(--original-border-color));
-          background-color: var(--tg-theme-secondary-bg-color, var(--original-white)); /* Match container or use bg_color? secondary seems better */
-          color: var(--tg-theme-text-color, var(--original-text-color)); /* Input text color */
-          border-radius: 8px;
-          font-size: 16px;
-          box-sizing: border-box;
-          font-family: inherit;
-        }
+      input[type="tel"],
+      input[type="text"],
+      textarea {
+        width: 100%;
+        padding: 12px;
+        /* Use hint color for border, match container bg */
+        border: 1px solid var(--tg-theme-hint-color, var(--original-border-color));
+        background-color: var(--tg-theme-secondary-bg-color, var(--original-white)); /* Match container or use bg_color? secondary seems better */
+        color: var(--tg-theme-text-color, var(--original-text-color)); /* Input text color */
+        border-radius: 8px;
+        font-size: 16px;
+        box-sizing: border-box;
+        font-family: inherit;
+        transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      }
 
-        /* Style placeholder text */
-        input[type="tel"]::placeholder,
+      input[type="tel"]:focus,
+      input[type="text"]:focus,
+      textarea:focus {
+        border-color: var(--tg-theme-button-color, var(--original-primary-color));
+        /* Optional: add a subtle shadow on focus */
+        box-shadow: 0 0 0 2px var(--tg-theme-button-color-alpha, rgba(36, 129, 215, 0.2)); 
+      }
+
+      /* Style placeholder text */
+      input[type="tel"]::placeholder,
+      input[type="text"]::placeholder,
       textarea::placeholder {
         color: var(--tg-theme-hint-color, #999); /* Use hint color for placeholder */
         opacity: 1; /* Override default lighter opacity */
       }
 
       textarea {
-        height: 120px;
+        min-height: 80px; /* Can be overridden by inline style if needed */
         resize: vertical;
+      }
+
+      .accessory-buttons {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .accessory-buttons button.accessory-btn {
+        padding: 6px 10px;
+        font-size: 13px;
+        background-color: var(--tg-theme-secondary-bg-color, var(--original-secondary-color));
+        color: var(--tg-theme-link-color, var(--original-primary-color));
+        border: 1px solid var(--tg-theme-hint-color, var(--original-border-color));
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+      }
+
+      .accessory-buttons button.accessory-btn:hover {
+        border-color: var(--tg-theme-link-color, var(--original-primary-color));
+        background-color: var(--tg-theme-bg-color, var(--original-background-color));
+      }
+
+      .accessory-buttons button.accessory-btn:active {
+        opacity: 0.7;
+        background-color: var(--tg-theme-hint-color, #ccc); 
       }
 
       .button-group {
         display: flex;
         gap: 10px;
-        margin-top: 20px;
+        margin-top: 25px; /* Increased space above main buttons */
       }
 
-      button {
+      button { /* This targets .cancel-btn and .send-btn in .button-group */
         flex: 1;
         padding: 12px;
         border: none;
         border-radius: 8px;
         font-weight: 500;
+        font-size: 16px;
         cursor: pointer;
         transition: opacity 0.2s;
       }
 
-      button:active {
+      /* Specific styles for main action buttons, if needed, can be derived or kept as is */
+      /* For example, if you want to ensure button:active here doesn't conflict with accessory-btn:active */
+      .button-group button:active {
         opacity: 0.7;
       }
 
       .cancel-btn {
-        /* Secondary/Cancel button uses secondary bg and main text color */
         background-color: var(--tg-theme-secondary-bg-color, var(--original-secondary-color));
         color: var(--tg-theme-text-color, var(--original-text-color));
-        /* Optionally add a subtle border if secondary bg is same as container */
-        border: 1px solid var(--tg-theme-hint-color, transparent);
+        border: 1px solid var(--tg-theme-hint-color, transparent); /* Subtle border or none */
+      }
+      .cancel-btn:hover {
+          opacity: 0.8;
       }
 
       .send-btn {
-        /* Primary button uses Telegram button colors */
         background-color: var(--tg-theme-button-color, var(--original-primary-color));
         color: var(--tg-theme-button-text-color, var(--original-white));
       }
+      .send-btn:hover {
+          opacity: 0.85;
+      }
 
       .error-message {
-        /* Use Telegram destructive text color for errors */
         color: var(--tg-theme-destructive-text-color, var(--original-destructive-color));
         font-size: 14px;
-        margin-top: 10px;
+        margin-top: 15px;
+        text-align: center;
       }
+
     </style>
   </head>
   <body>
@@ -160,18 +210,50 @@
       </div>
 
         <div class="input-group">
-          <label for="description">💬 Описание Проблемы</label>
-          <div class="hint">Модель техники, характер неисправности, комплектация и другие детали</div>
-          <textarea
-              id="description"
-              placeholder="Например: Lenovo IdeaPad 5. Не заряжается. Блок питания. Сумка"
+          <label for="deviceModel">⚙️ Модель Техники</label>
+          <input
+              type="text"
+              id="deviceModel"
+              placeholder="Например: Lenovo IdeaPad 5"
               inputmode="text"
-              enterkeyhint="done"
+              enterkeyhint="next"
+              autocapitalize="sentences"
+              aria-label="Модель техники"
+              >
+        </div>
+
+        <div class="input-group">
+          <label for="issueDescription">🛠️ Характер Неисправности</label>
+          <textarea
+              id="issueDescription"
+              placeholder="Например: Не заряжается, разбит экран"
+              inputmode="text"
+              enterkeyhint="next"
               autocapitalize="sentences"
               spellcheck="true"
               data-gramm="false"
-              aria-label="Описание проблемы"
-              ></textarea>
+              aria-label="Характер неисправности"
+              style="height: 80px;" 
+              ></textarea> 
+        </div>
+
+        <div class="input-group">
+          <label for="accessories">🔌 Комплектация</label>
+          <input
+              type="text"
+              id="accessories"
+              placeholder="Например: Блок питания, сумка"
+              inputmode="text"
+              enterkeyhint="done"
+              autocapitalize="sentences"
+              aria-label="Комплектация"
+              >
+          <div class="accessory-buttons" style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="accessory-btn" onclick="addAccessory('БП')">+БП</button>
+            <button type="button" class="accessory-btn" onclick="addAccessory('Сумка')">+Сумка</button>
+            <button type="button" class="accessory-btn" onclick="addAccessory('Кабель')">+Кабель</button>
+            <button type="button" class="accessory-btn" onclick="addAccessory('Мышь')">+Мышь</button>
+            </div>
         </div>
 
         <div class="button-group">

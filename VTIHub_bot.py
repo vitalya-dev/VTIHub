@@ -316,6 +316,7 @@ IRFANVIEW_ABS_PATH = os.path.join(SCRIPT_DIR, IRFANVIEW_EXECUTABLE_NAME)
 # Font Sizes
 FONT_SIZE_HEADER = 28
 FONT_SIZE_BODY = 18
+FONT_SIZE_TICKET_DETAILS = 24
 FONT_SIZE_SMALL = 16
 
 
@@ -351,6 +352,7 @@ def _load_fonts() -> Dict[str, ImageFont.FreeTypeFont]:
         return {
             "header": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_HEADER),
             "body": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_BODY),
+            "ticket_details": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_TICKET_DETAILS), 
             "small": ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_SMALL),
         }
     except IOError as e:
@@ -364,11 +366,37 @@ def _draw_text_line(
     font: ImageFont.FreeTypeFont,
     x: int,
     y: int,
-    color: str = TEXT_COLOR
+    color: str = TEXT_COLOR,
+    underline: bool = False,         # New parameter: True to underline
+    underline_offset: int = 2,       # New parameter: Pixels below text baseline for underline
+    underline_thickness: int = 1     # New parameter: Thickness of the underline
 ) -> int:
     """Draws a line of text and returns the Y position for the next line."""
+    # Draw the main text
     draw.text((x, y), text, font=font, fill=color)
-    ascent, descent = font.getmetrics()
+
+    # Get font metrics
+    ascent, descent = font.getmetrics() # ascent is height above baseline, descent is depth below
+
+    if underline:
+        # Calculate text width using getbbox for better accuracy
+        # bbox is (left, top, right, bottom) relative to (0,0) if text drawn at origin
+        # We only need its width (right - left)
+        text_bbox = font.getbbox(text)
+        text_width = text_bbox[2] - text_bbox[0]
+
+        # Calculate Y position for the underline
+        # y is the top of the text. Baseline is at y + ascent.
+        y_underline = y + ascent + underline_offset
+
+        # Draw the underline
+        draw.line(
+            [(x, y_underline), (x + text_width, y_underline)],
+            fill=color,  # Use the same color as the text, or you can specify another
+            width=underline_thickness
+        )
+
+    # Calculate the total height of the line for positioning the next line
     line_height = ascent + descent
     return y + line_height + LINE_SPACING
 
@@ -438,9 +466,9 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     body_y = current_y
     raw_identifier = ticket.get('s', 'N/A')
     display_identifier = format_identifier_partial(raw_identifier, keep_chars=6)
-    body_y = _draw_text_line(draw, f"Принял(а): {display_identifier}", fonts["body"], body_x, body_y)
-    body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["body"], body_x, body_y)
-    body_y = _draw_text_line(draw, f"Время: {ticket.get('t', 'N/A')}", fonts["body"], body_x, body_y)
+    body_y = _draw_text_line(draw, f"Принял(а): {display_identifier}", fonts["ticket_details"], body_x, body_y)
+    body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["ticket_details"], body_x, body_y, underline=True, underline_thickness=2)
+    body_y = _draw_text_line(draw, f"Время: {ticket.get('t', 'N/A')}", fonts["ticket_details"], body_x, body_y)
 
     ascii_bulb = """
      :
@@ -462,7 +490,7 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
             logger.warning(f"Could not draw ASCII art: {e}")
 
     desc_y = body_y + mm2px(1)
-    desc_y = _draw_text_line(draw, "Описание:", fonts["body"], body_x, desc_y)
+    desc_y = _draw_text_line(draw, "Описание:", fonts["ticket_details"], body_x, desc_y)
     description = ticket.get("d", "")
     wrap_width = 28
     for line in textwrap.wrap(description, width=wrap_width):

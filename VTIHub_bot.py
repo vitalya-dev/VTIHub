@@ -437,76 +437,56 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     img = Image.new("RGB", (LABEL_WIDTH_PX, LABEL_HEIGHT_PX), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
     margin_px = mm2px(MARGIN_MM)
-    current_y = margin_px
+    current_y = margin_px # This is the Y position for the start of the header
+
+    # --- Header Section ---
     try:
         logo = Image.open(LOGO_PATH).convert("RGBA")
         logo_size_px = mm2px(LOGO_SIZE_MM)
         img.paste(logo, (margin_px, margin_px), logo)
         header_text_x = margin_px + logo_size_px + mm2px(1)
-        header_y = margin_px
+        header_y = margin_px # Start header text at the top margin
         header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
         header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y)
         header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y)
         header_y = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y)
-        banner_height = max(margin_px + logo_size_px, header_y) + mm2px(1)
+        banner_height = max(margin_px + logo_size_px, header_y) + mm2px(1) # Calculate banner position
         draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
-        current_y = banner_height + mm2px(2)
+        current_y = banner_height + mm2px(2) # Update current_y to be below the header banner
     except FileNotFoundError:
         logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo.")
         header_text_x = margin_px
-        header_y = margin_px
+        header_y = margin_px # Start header text at the top margin
         header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
-        banner_height = header_y + mm2px(1)
+        # Note: If logo is not found, the address and company phones are not drawn in the current code.
+        banner_height = header_y + mm2px(1) # Calculate banner position
         draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
-        current_y = banner_height + mm2px(2)
+        current_y = banner_height + mm2px(2) # Update current_y to be below the header banner
     except Exception as e:
         logger.error(f"Error drawing header: {e}")
 
+    # --- Ticket Details Section ---
     body_x = margin_px
-    body_y = current_y
+    body_y = current_y # Start ticket details below the header
+    
     raw_identifier = ticket.get('s', 'N/A')
     display_identifier = format_identifier_partial(raw_identifier, keep_chars=6)
+
     body_y = _draw_text_line(draw, f"Принял(а): {display_identifier}", fonts["ticket_details"], body_x, body_y)
-    body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["ticket_details"], body_x, body_y, underline=True, underline_thickness=2)
+    body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["ticket_details"], body_x, body_y) 
     body_y = _draw_text_line(draw, f"Время: {ticket.get('t', 'N/A')}", fonts["ticket_details"], body_x, body_y)
 
-    ascii_bulb = """
-     :
- '.  _  .'
--=  (~)  =-
- .'  #  '.
-    """.splitlines()
-    if ascii_bulb:
-        try:
-            max_w = max(fonts["body"].getlength(line) for line in ascii_bulb)
-            art_x = LABEL_WIDTH_PX - margin_px - int(max_w)
-            art_y = current_y
-            ascent, _ = fonts["body"].getmetrics()
-            line_h = ascent
-            for line in ascii_bulb:
-                draw.text((art_x, art_y), line, font=fonts["body"], fill=TEXT_COLOR)
-                art_y += line_h
-        except Exception as e:
-            logger.warning(f"Could not draw ASCII art: {e}")
 
-    desc_y = body_y + mm2px(1)
+    # --- Description Section ---
+    # desc_y calculation is based on body_y, which is the Y position after "Время:"
+    desc_y = body_y + mm2px(1) 
     desc_y = _draw_text_line(draw, "Описание:", fonts["ticket_details"], body_x, desc_y)
+    
     description = ticket.get("d", "")
-    wrap_width = 28
+    wrap_width = 28 
     for line in textwrap.wrap(description, width=wrap_width):
-        desc_y = _draw_text_line(draw, line, fonts["small"], body_x, desc_y)
+        desc_y = _draw_text_line(draw, line, fonts["body"], body_x, desc_y)
 
-    box_w_px = mm2px(COMMENT_BOX_WIDTH_MM)
-    box_h_px = mm2px(COMMENT_BOX_HEIGHT_MM)
-    box_x = LABEL_WIDTH_PX - margin_px - box_w_px
-    box_y = LABEL_HEIGHT_PX - margin_px - box_h_px
-    box_radius = mm2px(COMMENT_BOX_RADIUS_MM)
-    draw.rounded_rectangle(
-        [box_x, box_y, box_x + box_w_px, box_y + box_h_px],
-        radius=box_radius,
-        outline=BORDER_COLOR,
-        width=BORDER_WIDTH
-    )
     return img
 
 def _save_label_image(

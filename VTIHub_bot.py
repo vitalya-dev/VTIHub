@@ -233,7 +233,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 		await update.message.reply_text("Sorry, there was an error preparing your ticket data.")
 		return
 
-	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_ticket_encoded")
+	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_encoded")
 	keyboard = InlineKeyboardMarkup([[print_button]])
 
 	message_link = None # Will store the link to the channel message
@@ -996,7 +996,7 @@ if __name__ == "__main__":
 
 	application.add_handler(CommandHandler("start", start_command))
 	application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-	application.add_handler(CallbackQueryHandler(handle_ticket_print_callback, pattern="^print:parse_ticket_encoded$"))
+	application.add_handler(CallbackQueryHandler(handle_ticket_print_callback, pattern="^print:parse_encoded$"))
 	application.add_handler(CallbackQueryHandler(handle_calculator_print_callback, pattern="^print:parse_calculator_encoded$"))
 
 	logger.info("Bot started and polling for updates...")

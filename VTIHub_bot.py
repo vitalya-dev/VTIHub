@@ -53,7 +53,7 @@ DEBUG_WEB_APP_URLS = {
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
 
-
+TICKETS_DATA_MARKER = "Encoded Data:" # For tickets
 CALC_DATA_MARKER = "Calculator Encoded Data:" # For calculator data
 
 logger = logging.getLogger(__name__)
@@ -233,7 +233,6 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 		await update.message.reply_text("Sorry, there was an error preparing your ticket data.")
 		return
 
-	data_marker = "Encoded Data:"
 	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_ticket_encoded")
 	keyboard = InlineKeyboardMarkup([[print_button]])
 
@@ -250,7 +249,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 				f"--- Детали заявки ---\n"
 				f"📞 Телефон: {phone_link_html} (Поиск: {search_hints})\n"
 				f"📝 Описание: {description}\n\n"
-				f"{data_marker} {base64_encoded_json}\n\n"
+				f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
 			)
 			sent_message = await context.bot.send_message(
 				chat_id=TARGET_CHANNEL_ID,
@@ -285,7 +284,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 			f"--- Детали заявки ---\n"
 			f"📞 Телефон: {phone_link_html} (Поиск: {search_hints})\n"
 			f"📝 Описание: {description}\n\n"
-			f"{data_marker} {base64_encoded_json}\n\n"
+			f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
 		]
 
 		# --- DEBUG OPTION CHANGE ---
@@ -463,8 +462,6 @@ MSG_ERR_NO_DATA = "❌ Ticket data not found in the message."
 MSG_ERR_DECODE = "❌ Failed to decode ticket data."
 MSG_ERR_GENERIC = "❌ An error occurred while generating the label."
 
-# Data Extraction
-DATA_MARKER = "Encoded Data:"
 
 def mm2px(mm: float) -> int:
 	"""Converts millimeters to pixels based on DPI."""
@@ -528,7 +525,7 @@ def _parse_ticket_data(message_text: Optional[str]) -> Optional[dict[str, Any]]:
 	"""Parses base64 encoded JSON ticket data from message text."""
 	if not message_text:
 		return None
-	match = re.search(rf"^{re.escape(DATA_MARKER)}\s+(.*)$", message_text, re.MULTILINE)
+	match = re.search(rf"^{re.escape(TICKETS_DATA_MARKER)}\s+(.*)$", message_text, re.MULTILINE)
 	if not match:
 		return None
 	try:
@@ -634,9 +631,7 @@ def _generate_ticket_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image
 
 
 
-FONT_SIZE_CALC_ITEM = 18 # Adjust as needed
-FONT_SIZE_CALC_TOTAL = 22 # Adjust as needed
-MAX_ITEMS_ON_LABEL = 12 # Adjust based on testing and desired font size
+MAX_ITEMS_ON_LABEL = 14 # Adjust based on testing and desired font size
 
 def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Image.Image]:
 	try:

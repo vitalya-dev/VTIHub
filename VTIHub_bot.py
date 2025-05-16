@@ -25,7 +25,8 @@ from telegram import (
 	KeyboardButton,      # Buttons within the ReplyKeyboard
 	ReplyKeyboardRemove, # To potentially hide the custom keyboard later
 	InlineKeyboardButton,
-	InlineKeyboardMarkup
+	InlineKeyboardMarkup,
+	Message
 )
 from telegram.constants import ChatMemberStatus, ParseMode
 from telegram.ext import (
@@ -52,6 +53,8 @@ DEBUG_WEB_APP_URLS = {
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
 
+
+CALC_DATA_MARKER = "Calculator Encoded Data:" # For calculator data
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +234,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 		return
 
 	data_marker = "Encoded Data:"
-	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_encoded")
+	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_ticket_encoded")
 	keyboard = InlineKeyboardMarkup([[print_button]])
 
 	message_link = None # Will store the link to the channel message
@@ -307,6 +310,113 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 			await update.message.reply_text("Sorry, failed to send your ticket confirmation message.")
 		except Exception as e_notify:
 			logger.error(f"Failed even to notify user {user_identifier} ({user.id}): {e_notify}")
+
+
+async def process_calculator_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
+	"""Processes data specifically from the Calculator Web App and offers printing."""
+	logger.info(f"Processing 'calculator_app' data: {data}")
+	user = update.effective_user
+	user_identifier = user.first_name
+	if user.username:
+		user_identifier = f"@{user.username}"
+	elif user.full_name:
+		user_identifier = user.full_name
+
+	items = data.get('items', [])
+	total_amount = data.get('total', 0.0)
+
+	if not items:
+		await update.message.reply_text("Калькулятор не вернул никаких товаров.")
+		logger.warning(f"Calculator data from {user_identifier} ({user.id}) had no items.")
+		return
+
+	# Prepare message for the user
+	message_parts = ["🛒 <b>Список товаров:</b>"]
+	for item in items:
+		item_name = item.get('name', 'Неизвестный товар')
+		item_price = item.get('price', 0.0)
+		safe_item_name = item_name.replace('<', '&lt;').replace('>', '&gt;')
+		message_parts.append(f"- {safe_item_name}: <code>{item_price:.2f}</code>")
+	
+	message_parts.append(f"\n🟰 <b>Итого:</b> <code>{total_amount:.2f}</code>")
+	
+	# Prepare data for printing payload
+	try:
+		tz = pytz.timezone('Europe/Moscow')
+		current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M")
+	except pytz.UnknownTimeZoneError:
+		logger.warning("Unknown timezone 'Europe/Moscow', falling back to UTC for calculator print data.")
+		current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
+	print_data_payload = {
+		'app_type': 'calculator',
+		'items': items,
+		'total': total_amount,
+		's': user_identifier,
+		't': current_time
+	}
+
+	base64_encoded_json_for_message = ""
+	print_button = None
+	try:
+		json_string = json.dumps(print_data_payload, separators=(',', ':'))
+		base64_encoded_json_for_message = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
+		# Add the encoded data to the message text, prefixed by the new marker
+		message_parts.append(f"\n\n{CALC_DATA_MARKER} {base64_encoded_json_for_message}") # Add to message
+		
+		print_button = InlineKeyboardButton(
+			"🖨️ Распечатать чек", 
+			callback_data="print:parse_calculator_encoded" # Simple callback data
+		)
+			
+	except Exception as e:
+		logger.error(f"Failed to encode calculator data for printing: {e}", exc_info=True)
+		# No button if encoding fails, data won't be in message either unless we add it before this block
+
+	response_message = "\n".join(message_parts) # Join after potentially adding encoded data
+
+	keyboard_buttons = []
+	if print_button:
+		keyboard_buttons.append([print_button])
+	
+	reply_markup = InlineKeyboardMarkup(keyboard_buttons) if keyboard_buttons else None
+
+	try:
+		await update.message.reply_text(
+			text=response_message,
+			parse_mode=ParseMode.HTML,
+			reply_markup=reply_markup,
+			disable_web_page_preview=True # Consistent with ticket app
+		)
+		logger.info(f"Calculator summary sent to user {user_identifier} ({user.id})")
+	except Exception as e:
+		logger.error(f"Error sending calculator summary to user {user_identifier} ({user.id}): {e}", exc_info=True)
+		try:
+			await update.message.reply_text("Извините, не удалось отобразить итоги калькулятора.")
+		except Exception as e_notify:
+			logger.error(f"Failed even to notify user {user_identifier} ({user.id}) about calculator error: {e_notify}")
+
+def _parse_calculator_data(message_text: Optional[str]) -> Optional[dict[str, Any]]:
+	"""Parses base64 encoded JSON calculator data from message text using CALC_DATA_MARKER."""
+	if not message_text:
+		return None
+	# Use CALC_DATA_MARKER here
+	match = re.search(rf"^{re.escape(CALC_DATA_MARKER)}\s+(.*)$", message_text, re.MULTILINE)
+	if not match:
+		logger.debug(f"CALC_DATA_MARKER not found in message text for parsing.")
+		return None
+	try:
+		payload_b64 = match.group(1)
+		payload_bytes = base64.b64decode(payload_b64)
+		payload_str = payload_bytes.decode("utf-8")
+		calculator_data = json.loads(payload_str)
+		logger.debug(f"Successfully parsed calculator data: {calculator_data}")
+		return calculator_data
+	except Exception as e:
+		logger.error(f"Failed to parse calculator data from message: {e}", exc_info=True)
+		return None
+
+
 
 
 # Label Dimensions & Resolution
@@ -443,7 +553,7 @@ def format_identifier_partial(identifier: str, keep_chars: int = 4, remove_leadi
 		return display_name
 
 
-def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
+def _generate_ticket_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
 	try:
 		fonts = _load_fonts()
 	except IOError:
@@ -521,6 +631,108 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
 
 	return img
 
+
+
+
+FONT_SIZE_CALC_ITEM = 18 # Adjust as needed
+FONT_SIZE_CALC_TOTAL = 22 # Adjust as needed
+MAX_ITEMS_ON_LABEL = 12 # Adjust based on testing and desired font size
+
+def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Image.Image]:
+	try:
+		fonts = _load_fonts() # Reuse existing font loading
+	except IOError:
+		return None
+
+	img = Image.new("RGB", (LABEL_WIDTH_PX, LABEL_HEIGHT_PX), BACKGROUND_COLOR)
+	draw = ImageDraw.Draw(img)
+	margin_px = mm2px(MARGIN_MM)
+	current_y = margin_px
+
+	# --- Calculator Details Section ---
+	body_x = margin_px
+	
+	items_list = calc_data.get('items', [])
+	total_amount = calc_data.get('total', 0.0)
+
+	# --- Items List ---
+	price_area_width_px = mm2px(15) # Reserve space for price on the right
+
+	for i, item_data in enumerate(items_list):
+		if i >= MAX_ITEMS_ON_LABEL:
+			available_height_for_trunc_msg = LABEL_HEIGHT_PX - current_y - margin_px - fonts["small"].getbbox("Итого:")[3] - mm2px(2)
+			if fonts["small"].getbbox("...и еще")[3] < available_height_for_trunc_msg: # Check if truncation message fits
+				_draw_text_line(draw, f"...и еще {len(items_list) - MAX_ITEMS_ON_LABEL} товар(ов)", fonts["small"], body_x, current_y)
+			break
+
+		item_name = item_data.get('name', 'N/A')
+		item_price = item_data.get('price', 0.0)
+		
+		# Wrap item name if too long
+		# Pillow's textwrap is not available directly, so manual check or simple split
+		# For simplicity, we'll truncate with ellipsis if it's too wide.
+		# A more robust way would be to check textsize().
+		
+		max_name_width = LABEL_WIDTH_PX - (2 * margin_px) - price_area_width_px - mm2px(2) # available width for name
+		
+		# Truncate item name if it's too long
+		avg_char_width = fonts["small"].getbbox("x")[2] # Approximate width of one character
+		if avg_char_width > 0 and len(item_name) * avg_char_width > max_name_width:
+			max_chars = int(max_name_width / avg_char_width) - 3 # -3 for "..."
+			display_name = item_name[:max_chars] + "..."
+		else:
+			display_name = item_name
+
+		# Draw item name (left aligned)
+		draw.text((body_x, current_y), display_name, font=fonts["small"], fill=TEXT_COLOR)
+		
+		# Draw item price (right aligned)
+		price_text = f"{item_price:.2f}"
+		price_text_width = fonts["small"].getbbox(price_text)[2] 
+		price_x = LABEL_WIDTH_PX - margin_px - price_text_width
+		draw.text((price_x, current_y), price_text, font=fonts["small"], fill=TEXT_COLOR)
+
+		ascent, descent = fonts["small"].getmetrics()
+		current_y += ascent + descent + LINE_SPACING // 2 # Smaller line spacing for items
+		
+		if current_y + fonts["small"].getbbox("Итого:")[3] + mm2px(2) > LABEL_HEIGHT_PX - margin_px: # Check if total will fit
+			if i < len(items_list) -1: # if there are more items not drawn
+				 # Overwrite the last drawn item with a truncation message if it was not the actual last item
+				current_y -= (ascent + descent + LINE_SPACING // 2) # backtrack
+				draw.rectangle( # Clear previous text line
+					(body_x, current_y, LABEL_WIDTH_PX - margin_px, current_y + ascent + descent + LINE_SPACING // 2),
+					fill=BACKGROUND_COLOR
+				)
+				available_height_for_trunc_msg = LABEL_HEIGHT_PX - current_y - margin_px - fonts["small"].getbbox("Итого:")[3] - mm2px(2)
+				if fonts["small"].getbbox("...и еще")[3] < available_height_for_trunc_msg:
+					_draw_text_line(draw, f"...и еще {len(items_list) - i} товар(ов)", fonts["small"], body_x, current_y)
+			break
+
+
+	current_y += mm2px(2) # Space before total
+
+	# --- Total Amount ---
+	# Ensure total is not drawn off label
+	total_text_height = fonts["small"].getbbox(f"Итого: {total_amount:.2f}")[3]
+	if current_y + total_text_height > LABEL_HEIGHT_PX - margin_px:
+		# If total doesn't fit, try to move it up a bit, or it might be cut off.
+		# This part needs careful adjustment based on actual label space.
+		# For now, we draw it; if it's cut, layout or MAX_ITEMS_ON_LABEL needs tuning.
+		pass
+
+	_draw_text_line(draw, "----------------------------------", fonts["body"], body_x, current_y, color=BORDER_COLOR) # Separator line
+	current_y += mm2px(1)
+	
+	total_str = f"Итого: {total_amount:.2f}"
+	total_text_bbox = fonts["small"].getbbox(total_str)
+	total_width = total_text_bbox[2] - total_text_bbox[0]
+	total_x = LABEL_WIDTH_PX - margin_px - total_width # Right align total
+	
+	_draw_text_line(draw, total_str, fonts["small"], int(total_x), current_y, color=TEXT_COLOR)
+
+	return img
+
+
 def _save_label_image(
 	image: Image.Image,
 	ticket: Dict[str, Any],
@@ -543,25 +755,40 @@ def _save_label_image(
 		logger.error(f"Failed to save image to {absolute_file_path}: {e}")
 		return None
 
-async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_ticket_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
-	if not query or not query.message:
-		logger.warning("Received callback query without query or message.")
+	if not query:
+		logger.warning("Received callback event without query object.")
 		return
-	await query.answer()
-	temp_msg = await query.message.reply_text(MSG_GENERATING) #pyright: ignore
+
+	await query.answer() # Acknowledge the callback
+
+	# Check if the message associated with the callback is accessible
+	if not query.message or not isinstance(query.message, Message):
+		logger.warning("Ticket print callback: Original message is not accessible or not a standard message.")
+		# Optionally, try to send a message to the user who pressed the button if possible
+		try:
+			await context.bot.send_message(
+				chat_id=query.from_user.id, 
+				text="Не удалось обработать ваш запрос: исходное сообщение для печати заявки недоступно."
+			)
+		except Exception as e:
+			logger.error(f"Failed to notify user about inaccessible message: {e}")
+		return
+
+	temp_msg = await query.message.reply_text(MSG_GENERATING) 
 	try:
-		ticket_data = _parse_ticket_data(query.message.text) #pyright: ignore
+		ticket_data = _parse_ticket_data(query.message.text) 
 		if ticket_data is None:
-			await query.message.reply_text(MSG_ERR_NO_DATA if not query.message.text or DATA_MARKER not in query.message.text else MSG_ERR_DECODE) #pyright: ignore
+			await query.message.reply_text(MSG_ERR_NO_DATA if not query.message.text or DATA_MARKER not in query.message.text else MSG_ERR_DECODE)
 			return
-		label_image = _generate_label_image(ticket_data)
+		label_image = _generate_ticket_label_image(ticket_data)
 		if label_image is None:
-			await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
+			await query.message.reply_text(MSG_ERR_GENERIC)
 			return
-		file_path = _save_label_image(label_image, ticket_data)
+		file_path = _save_label_image(label_image, ticket_data, output_dir=os.path.join(OUTPUT_DIR, "ticket_labels"))
 		if file_path is None:
-			await query.message.reply_text("❌ Failed to save the label image.") #pyright: ignore
+			await query.message.reply_text("❌ Failed to save the label image.") 
 			return
 		printer_name = context.bot_data.get('printer_name')
 		if printer_name and file_path:
@@ -588,10 +815,10 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
 				logger.error(f"IrfanView print command failed for {file_path}. Return Code: {result.returncode}. Stderr: {result.stderr}. Stdout: {result.stdout}")
 		else:
 			 # If no printer_name, just confirm generation and provide path
-			await query.message.reply_photo(photo=open(file_path, 'rb'), caption=MSG_SUCCESS) #pyright: ignore
+			await query.message.reply_photo(photo=open(file_path, 'rb'), caption=MSG_SUCCESS) 
 	except Exception as e:
-		logger.exception("Unhandled error in handle_print_callback")
-		await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
+		logger.exception("Unhandled error in handle_ticket_print_callback")
+		await query.message.reply_text(MSG_ERR_GENERIC) 
 	finally:
 		if temp_msg:
 			try:
@@ -601,6 +828,92 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
 				)
 			except Exception as e:
 				logger.warning(f"Failed to delete temporary message: {e}")
+
+
+async def handle_calculator_print_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	query = update.callback_query
+	if not query:
+		logger.warning("Received callback event without query object.")
+		return
+
+	await query.answer() # Acknowledge the callback
+
+	# Check if the message associated with the callback is accessible
+	if not query.message or not isinstance(query.message, Message):
+		logger.warning("Calculator print callback: Original message is not accessible or not a standard message.")
+		# Optionally, try to send a message to the user who pressed the button if possible
+		try:
+			await context.bot.send_message(
+				chat_id=query.from_user.id, 
+				text="Не удалось обработать ваш запрос: исходное сообщение для печати чека недоступно."
+			)
+		except Exception as e:
+			logger.error(f"Failed to notify user about inaccessible message: {e}")
+		return
+	
+	# Parse data from the message text using the new parser
+	calculator_data = _parse_calculator_data(query.message.text) # Parse from query.message.text
+
+	if calculator_data is None:
+		# Determine if it was a parsing error or marker not found
+		err_msg = MSG_ERR_DECODE if query.message.text and CALC_DATA_MARKER in query.message.text else MSG_ERR_NO_DATA
+		logger.warning(f"Failed to get calculator_data from message. Text was: '{query.message.text[:100]}...'") # Log snippet
+		await query.message.reply_text(err_msg)
+		return
+		
+	temp_msg = await query.message.reply_text(MSG_GENERATING)
+
+	try:
+		# The 'app_type': 'calculator' check is still good if present in parsed data
+		if calculator_data.get('app_type') != 'calculator':
+			await query.message.reply_text("Данные не от калькулятора.")
+			logger.warning("Calculator print callback received non-calculator data after parsing.")
+			if temp_msg: await context.bot.delete_message(chat_id=temp_msg.chat.id, message_id=temp_msg.message_id)
+			return
+
+		label_image = _generate_calculator_label_image(calculator_data) # This function remains the same
+		if label_image is None:
+			await query.message.reply_text(MSG_ERR_GENERIC)
+			if temp_msg: await context.bot.delete_message(chat_id=temp_msg.chat.id, message_id=temp_msg.message_id)
+			return
+
+		file_path = _save_label_image(label_image, calculator_data, output_dir=os.path.join(OUTPUT_DIR, "calculator_labels"))
+		if file_path is None:
+			await query.message.reply_text("❌ Не удалось сохранить изображение чека.")
+			if temp_msg: await context.bot.delete_message(chat_id=temp_msg.chat.id, message_id=temp_msg.message_id)
+			return
+
+		printer_name = context.bot_data.get('printer_name')
+		if printer_name:
+			logger.info(f"Printer name '{printer_name}' provided. Attempting to print calculator label {file_path}")
+			print_command = [
+				IRFANVIEW_ABS_PATH, file_path, f'/print="{printer_name}"',
+				f'/dpi="({DPI},{DPI})"', f'/ini="{SCRIPT_DIR}"'
+			]
+			logger.info(f"Executing print command: {' '.join(print_command)}")
+			result = subprocess.run(
+				' '.join(print_command), shell=True, check=False,
+				capture_output=True, text=True, timeout=30
+			)
+			if result.returncode == 0:
+				logger.info(f"IrfanView print command successful for {file_path}. Output: {result.stdout}")
+				await query.message.reply_text(f"✅ Чек отправлен на принтер: {printer_name}")
+			else:
+				logger.error(f"IrfanView print command failed for {file_path}. RC: {result.returncode}. Err: {result.stderr}. Out: {result.stdout}")
+				await query.message.reply_text(f"⚠️ Ошибка печати чека. Код: {result.returncode}. Проверьте логи.")
+		else:
+			await query.message.reply_photo(photo=open(file_path, 'rb'), caption="✅ Чек сгенерирован!")
+
+	except Exception as e:
+		logger.exception("Unhandled error in handle_calculator_print_callback")
+		await query.message.reply_text(MSG_ERR_GENERIC)
+	finally:
+		if temp_msg:
+			try:
+				await context.bot.delete_message(chat_id=temp_msg.chat.id, message_id=temp_msg.message_id)
+			except Exception as e_del:
+				logger.warning(f"Failed to delete temporary message: {e_del}")
+
 
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -615,6 +928,8 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
 		app_origin = data.get('app_origin')
 		if app_origin == 'ticket_app':
 			await process_ticket_app_data(update, context, data)
+		elif app_origin == 'calculator_app':
+			await process_calculator_app_data(update, context, data) #
 		else:
 			logger.warning(f"Received data from unknown or missing app_origin: {app_origin}. Data: {data}")
 			await update.message.reply_text(
@@ -686,7 +1001,8 @@ if __name__ == "__main__":
 
 	application.add_handler(CommandHandler("start", start_command))
 	application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-	application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_encoded$"))
+	application.add_handler(CallbackQueryHandler(handle_ticket_print_callback, pattern="^print:parse_ticket_encoded$"))
+	application.add_handler(CallbackQueryHandler(handle_calculator_print_callback, pattern="^print:parse_calculator_encoded$"))
 
 	logger.info("Bot started and polling for updates...")
-	application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True) # Consider if drop_pending_updates is desired
+	application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

@@ -43,6 +43,11 @@ from logging import DEBUG, INFO
 # Define URLs for potentially multiple Web Apps
 WEB_APP_URLS = {
 	"ticket": "https://vitalya-dev.github.io/VTIHub/ticket_app.html",
+	"calculator": "https://vitalya-dev.github.io/VTIHub/calculator_app.html"
+}
+
+DEBUG_WEB_APP_URLS = {
+	"ticket": "https://vitalya-dev.github.io/VTIHub/ticket_app_debug.html",
 }
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
@@ -79,31 +84,25 @@ async def post_init(application: Application):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	"""
 	Handles the /start command.
-	If debug mode is active, bypasses membership check.
-	Otherwise, checks if the user is an active member of the target channel.
-	If access is granted (either by debug mode or membership), shows the main keyboard.
-	If NO (and not in debug mode), sends a message denying access.
+	Shows the main keyboard with buttons for Web Apps.
 	"""
 	user = update.effective_user
 	user_id = user.id
-	user_info_log = f"{user_id} ({user.username or user.full_name})" # For clearer logs
+	user_info_log = f"{user_id} ({user.username or user.full_name})"
 
-	# --- DEBUG OPTION CHANGE for start_command ---
 	debug_mode = context.bot_data.get('debug_mode', False)
-	user_can_access = False # Assume no access initially
-	# Default denial message, only used if not in debug mode and access is denied
+	user_can_access = False
 	denial_reason = "Извините, этот бот доступен только для сотрудников ВТИ, являющихся участниками рабочего канала."
 
 	if debug_mode:
 		logger.info(f"DEBUG MODE ACTIVE for /start command by {user_info_log}. Bypassing membership check.")
 		user_can_access = True
-		# Optionally, notify the user that the check was bypassed due to debug mode
 		await update.message.reply_text(
 			"⚙️ *Режим отладки АКТИВЕН*: Проверка членства в канале пропущена.",
 		)
 	else:
 		if not TARGET_CHANNEL_ID:
-			logger.error("TARGET_CHANNEL_ID is not configured in the bot code. Denying access.")
+			logger.error("TARGET_CHANNEL_ID is not configured. Denying access.")
 			denial_reason = "⚠️ Ошибка конфигурации бота. Доступ запрещен."
 		else:
 			try:
@@ -115,41 +114,50 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 					logger.info(f"Access GRANTED for user {user_info_log}. Status: {chat_member.status} in channel {TARGET_CHANNEL_ID}.")
 				else:
 					logger.warning(f"Access DENIED for user {user_info_log}. Status: {chat_member.status} in channel {TARGET_CHANNEL_ID}.")
-					# user_can_access remains False, denial_reason is the default one already set
-
 			except error.BadRequest as e:
 				if "user not found" in e.message.lower():
 					logger.warning(f"Access DENIED for user {user_info_log}. User not found in channel {TARGET_CHANNEL_ID}.")
-					# user_can_access remains False, denial_reason is the default one already set
 				else:
 					logger.error(f"BadRequest when checking membership for user {user_info_log} in channel {TARGET_CHANNEL_ID}: {e}")
 					denial_reason = "⚠️ Не удалось проверить ваше членство в канале из-за ошибки. Пожалуйста, попробуйте позже или свяжитесь с администратором."
-					# user_can_access remains False
 			except error.TelegramError as e:
 				logger.error(f"TelegramError checking membership for {user_info_log} in {TARGET_CHANNEL_ID}: {e}")
 				denial_reason = "⚠️ Произошла ошибка при проверке доступа. Пожалуйста, попробуйте позже или свяжитесь с администратором."
 
-	# --- Grant Access or Deny ---
 	if user_can_access:
-		# User is verified (either by debug mode or membership), show the main keyboard
-		# Determine the ticket app URL based on debug mode
-		ticket_app_url = WEB_APP_URLS["ticket"] # Default to standard URL
-		if debug_mode:
-			ticket_app_url = "https://vitalya-dev.github.io/VTIHub/ticket_app_debug.html"
-			logger.info(f"DEBUG MODE: Using debug ticket app URL: {ticket_app_url}")
+		current_ticket_urls = DEBUG_WEB_APP_URLS if debug_mode else WEB_APP_URLS
 		
-		kb = [
+		ticket_app_url = current_ticket_urls.get("ticket", WEB_APP_URLS["ticket"]) # Fallback to default if not in debug set
+		calculator_app_url = current_ticket_urls.get("calculator", WEB_APP_URLS.get("calculator"))
+
+		if not calculator_app_url:
+			logger.error("Calculator app URL is not defined!")
+			# Optionally notify user or handle this error
+		
+		if debug_mode:
+			logger.info(f"DEBUG MODE: Using debug ticket app URL: {ticket_app_url}")
+			if calculator_app_url: # only log if it exists
+				logger.info(f"DEBUG MODE: Using debug calculator app URL: {calculator_app_url}")
+
+
+		keyboard_buttons = [
 			[KeyboardButton("📄 Новая Заявка", web_app=WebAppInfo(url=ticket_app_url))]
 		]
-		main_message = "🐶" # Your standard welcome message/emoji
+		
+		# Only add calculator button if URL is present
+		if calculator_app_url:
+			keyboard_buttons.append(
+				[KeyboardButton("🛍️ Калькулятор", web_app=WebAppInfo(url=calculator_app_url))]
+			)
+
+		main_message = "🐶"
 		await update.message.reply_text(
 			main_message,
-			reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True)
+			reply_markup=ReplyKeyboardMarkup(keyboard_buttons, resize_keyboard=True)
 		)
 	else:
-		# This block is only reached if NOT in debug_mode AND access was denied.
 		await update.message.reply_text(
-			denial_reason, # denial_reason would have been set appropriately in the !debug_mode block
+			denial_reason,
 			reply_markup=ReplyKeyboardRemove()
 		)
 
@@ -578,6 +586,9 @@ async def handle_print_callback(update: Update, context: ContextTypes.DEFAULT_TY
 				logger.info(f"IrfanView print command successful for {file_path}. Output: {result.stdout}")
 			else:
 				logger.error(f"IrfanView print command failed for {file_path}. Return Code: {result.returncode}. Stderr: {result.stderr}. Stdout: {result.stdout}")
+		else:
+			 # If no printer_name, just confirm generation and provide path
+			await query.message.reply_photo(photo=open(file_path, 'rb'), caption=MSG_SUCCESS) #pyright: ignore
 	except Exception as e:
 		logger.exception("Unhandled error in handle_print_callback")
 		await query.message.reply_text(MSG_ERR_GENERIC) #pyright: ignore
@@ -627,6 +638,7 @@ if __name__ == "__main__":
 	parser.add_argument('--token', required=True, help='Telegram Bot Token')
 	parser.add_argument(
 		'--print',
+		dest='printer_name', # Changed dest to avoid conflict with builtin print
 		default=None,
 		help='Specify the network printer name for IrfanView printing (e.g., "MyPrinter" or "\\\\Server\\PrinterShare")'
 	)
@@ -634,22 +646,22 @@ if __name__ == "__main__":
 	parser.add_argument('--log-level', default='INFO',
 						choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
 						help='Set the logging level')
-	# --- DEBUG OPTION CHANGE ---
-	parser.add_argument('--debug', action='store_true', help='Enable debug mode (no channel messages)')
+	parser.add_argument('--debug', action='store_true', help='Enable debug mode (no channel messages, potentially different web app URLs)')
 	args = parser.parse_args()
 
 	if args.log_file:
+		# Ensure the log directory exists, using SCRIPT_DIR for relative paths
 		log_path = os.path.join(SCRIPT_DIR, args.log_file)
 		os.makedirs(os.path.dirname(log_path), exist_ok=True)
 	else:
-		log_path = None
+		log_path = None # Log to console
 
 	logging.basicConfig(
-		filename=log_path,
+		filename=log_path, # None here means console
 		format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 		level=getattr(logging, args.log_level.upper())
 	)
-	logging.getLogger("httpx").setLevel(logging.WARNING)
+	logging.getLogger("httpx").setLevel(logging.WARNING) # Quieten httpx library
 
 	logger.info("Starting bot...")
 
@@ -658,18 +670,16 @@ if __name__ == "__main__":
 		.post_init(post_init) \
 		.build()
 
-	# --- DEBUG OPTION CHANGE ---
-	# Store the debug mode in bot_data so handlers can access it
 	application.bot_data['debug_mode'] = args.debug
 	if args.debug:
-		logger.info("Debug mode ENABLED. Bot will not send messages to the channel.")
+		logger.info("Debug mode ENABLED.")
 	else:
-		logger.info("Debug mode DISABLED. Bot will send messages to the channel as configured.")
+		logger.info("Debug mode DISABLED.")
 
 
-	if args.print:
-		logger.info(f"Printer name specified: '{args.print}'. Printing will be enabled.")
-		application.bot_data['printer_name'] = args.print
+	if args.printer_name: # Use the new dest name
+		logger.info(f"Printer name specified: '{args.printer_name}'. Printing will be enabled.")
+		application.bot_data['printer_name'] = args.printer_name
 	else:
 		logger.info("No printer name specified. Printing via IrfanView is disabled.")
 		application.bot_data['printer_name'] = None
@@ -679,4 +689,4 @@ if __name__ == "__main__":
 	application.add_handler(CallbackQueryHandler(handle_print_callback, pattern="^print:parse_encoded$"))
 
 	logger.info("Bot started and polling for updates...")
-	application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+	application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True) # Consider if drop_pending_updates is desired

@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+	<title>Калькулятор Товаров</title>
+	<style>
+		/* Adapted CSS from ticket_app.html */
+		:root {
+			--original-primary-color: #2481d7;
+			--original-secondary-color: #e5e5ea;
+			--original-text-color: #1a1a1a;
+			--original-label-color: #666;
+			--original-background-color: #f0f2f5;
+			--original-white: #ffffff;
+			--original-border-color: #ddd;
+			--original-destructive-color: red;
+			--tg-theme-button-color-alpha: rgba(36, 129, 215, 0.2);
+		}
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background-color: var(--tg-theme-bg-color, var(--original-background-color));
+			color: var(--tg-theme-text-color, var(--original-text-color));
+			margin: 0;
+			padding: 20px;
+			display: flex;
+			justify-content: center;
+			padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+			padding-left: calc(env(safe-area-inset-left, 0px) + 20px);
+			padding-right: calc(env(safe-area-inset-right, 0px) + 20px);
+			padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+			box-sizing: border-box;
+			min-height: 100vh;
+		}
+
+		.app-container { /* Renamed from ticket-container */
+			background: var(--tg-theme-secondary-bg-color, var(--original-white));
+			border-radius: 12px;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			padding: 20px;
+			width: 100%;
+			max-width: 400px;
+			box-sizing: border-box;
+		}
+
+		.header {
+			font-size: 20px;
+			font-weight: 500;
+			margin-bottom: 20px;
+			color: var(--tg-theme-text-color, var(--original-text-color));
+			text-align: center;
+		}
+
+		.input-group {
+			margin-bottom: 18px;
+		}
+
+		.input-row {
+			display: flex;
+			gap: 10px;
+			align-items: flex-end; /* Align button with bottom of inputs */
+		}
+
+		.input-row .input-group {
+			flex-grow: 1;
+			margin-bottom: 0; /* Remove margin if it's inside input-row */
+		}
+
+
+		label {
+			display: block;
+			margin-bottom: 8px;
+			color: var(--tg-theme-hint-color, var(--original-label-color));
+			font-size: 14px;
+			font-weight: 500;
+		}
+
+		input[type="text"],
+		input[type="number"] {
+			width: 100%;
+			padding: 12px;
+			border: 1px solid var(--tg-theme-hint-color, var(--original-border-color));
+			background-color: var(--tg-theme-secondary-bg-color, var(--original-white));
+			color: var(--tg-theme-text-color, var(--original-text-color));
+			border-radius: 8px;
+			font-size: 16px;
+			box-sizing: border-box;
+			font-family: inherit;
+			transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+		}
+
+		input[type="text"]:focus,
+		input[type="number"]:focus {
+			border-color: var(--tg-theme-button-color, var(--original-primary-color));
+			box-shadow: 0 0 0 2px var(--tg-theme-button-color-alpha, rgba(36, 129, 215, 0.2));
+		}
+
+		input[type="text"]::placeholder,
+		input[type="number"]::placeholder {
+			color: var(--tg-theme-hint-color, #999);
+			opacity: 1;
+		}
+		/* For number input, hide spinners in Webkit/Blink */
+		input[type=number]::-webkit-inner-spin-button,
+		input[type=number]::-webkit-outer-spin-button {
+		  -webkit-appearance: none;
+		  margin: 0;
+		}
+		input[type=number] {
+		  -moz-appearance: textfield; /* Firefox */
+		}
+
+
+		.items-list-container {
+			margin-top: 20px;
+			margin-bottom: 20px;
+			padding: 10px;
+			background-color: var(--tg-theme-bg-color, var(--original-background-color));
+			border-radius: 8px;
+			min-height: 50px;
+		}
+
+		.items-list-container .list-header {
+			font-weight: bold;
+			margin-bottom: 8px;
+			color: var(--tg-theme-text-color, var(--original-text-color));
+		}
+
+		.items-list ul {
+			list-style: none;
+			padding: 0;
+			margin: 0;
+		}
+
+		.items-list li {
+			display: flex;
+			justify-content: space-between;
+			padding: 8px 0;
+			border-bottom: 1px solid var(--tg-theme-hint-color, var(--original-border-color));
+			color: var(--tg-theme-text-color, var(--original-text-color));
+			font-size: 15px;
+		}
+		.items-list li:last-child {
+			border-bottom: none;
+		}
+		.items-list li .item-name {
+			flex-grow: 1;
+			margin-right: 10px;
+			word-break: break-word;
+		}
+		.items-list li .item-price {
+			font-weight: 500;
+			white-space: nowrap;
+		}
+		.items-list li .remove-item-btn {
+			background: none;
+			border: none;
+			color: var(--tg-theme-destructive-text-color, var(--original-destructive-color));
+			cursor: pointer;
+			font-size: 14px;
+			padding: 0 0 0 10px;
+			font-weight: bold;
+		}
+		.items-list li .remove-item-btn:hover {
+			opacity: 0.7;
+		}
+
+
+		.total-price-container {
+			margin-top: 20px;
+			padding: 15px;
+			background-color: var(--tg-theme-secondary-bg-color, var(--original-white));
+			border: 1px solid var(--tg-theme-button-color, var(--original-primary-color));
+			border-radius: 8px;
+			text-align: right;
+			font-size: 18px;
+			font-weight: bold;
+			color: var(--tg-theme-text-color, var(--original-text-color));
+		}
+		.total-price-container span {
+			 color: var(--tg-theme-button-color, var(--original-primary-color));
+		}
+
+
+		.form-actions {
+			display: flex;
+			gap: 10px;
+			margin-top: 25px;
+		}
+
+		button {
+			padding: 12px;
+			border: none;
+			border-radius: 8px;
+			font-weight: 500;
+			font-size: 16px;
+			cursor: pointer;
+			transition: opacity 0.2s;
+		}
+
+		.add-item-btn {
+			background-color: var(--tg-theme-button-color, var(--original-primary-color));
+			color: var(--tg-theme-button-text-color, var(--original-white));
+			padding: 12px 15px; /* Adjust padding for a standalone button */
+			height: 48px; /* Match input height */
+			align-self: flex-end; /* Align with input fields */
+		}
+		.add-item-btn:hover {
+			opacity: 0.85;
+		}
+
+
+		.form-actions button {
+			flex: 1;
+		}
+		.form-actions button:active {
+			opacity: 0.7;
+		}
+
+		.back-btn { /* Was cancel-btn */
+			background-color: var(--tg-theme-secondary-bg-color, var(--original-secondary-color));
+			color: var(--tg-theme-text-color, var(--original-text-color));
+			border: 1px solid var(--tg-theme-hint-color, transparent);
+		}
+		.back-btn:hover {
+			opacity: 0.8;
+		}
+
+		.print-btn { /* Was send-btn */
+			background-color: var(--tg-theme-button-color, var(--original-primary-color));
+			color: var(--tg-theme-button-text-color, var(--original-white));
+		}
+		.print-btn:hover {
+			opacity: 0.85;
+		}
+
+		.error-message {
+			color: var(--tg-theme-destructive-text-color, var(--original-destructive-color));
+			font-size: 14px;
+			margin-top: 15px;
+			text-align: center;
+			min-height: 20px; /* Reserve space for error message */
+		}
+	</style>
+</head>
+<body>
+	<div class="app-container">
+		<div class="header">🛍️ Калькулятор Товаров</div>
+
+		<div class="input-row">
+			<div class="input-group">
+				<label for="itemName">Наименование</label>
+				<input type="text" id="itemName" placeholder="Напр: Хлеб" enterkeyhint="next">
+			</div>
+
+			<div class="input-group" style="flex-basis: 120px; flex-grow: 0;">
+				<label for="itemPrice">Цена</label>
+				<input type="number" id="itemPrice" placeholder="100" inputmode="decimal" enterkeyhint="done">
+			</div>
+			<button type="button" class="add-item-btn" aria-label="Добавить товар">➕</button>
+		</div>
+
+
+		<div class="items-list-container">
+			<div class="list-header">Список товаров:</div>
+			<div class="items-list">
+				<ul id="itemListUl">
+					</ul>
+			</div>
+		</div>
+
+		<div class="total-price-container">
+			Итого: <span id="totalPrice">0.00</span>
+		</div>
+
+		<div id="error-message" class="error-message"></div>
+
+		<div class="form-actions">
+			<button type="button" class="back-btn" aria-label="Назад">Назад</button>
+			<button type="button" class="print-btn" aria-label="Распечатать">Распечатать</button>
+		</div>
+	</div>
+
+	<script src="https://telegram.org/js/telegram-web-app.js"></script>
+	<script>
+		// Ensure Telegram WebApp is ready
+		if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+			Telegram.WebApp.ready();
+			Telegram.WebApp.expand(); // Expand the web app to full height
+
+			// Optional: Listen for theme changes to adapt if needed
+			Telegram.WebApp.onEvent('themeChanged', function() {
+				// You could re-apply styles or make adjustments if necessary
+				// console.log('Theme changed:', Telegram.WebApp.themeParams);
+			});
+		}
+
+		const itemNameInput = document.getElementById('itemName');
+		const itemPriceInput = document.getElementById('itemPrice');
+		const addItemBtn = document.querySelector('.add-item-btn');
+		const itemListUl = document.getElementById('itemListUl');
+		const totalPriceEl = document.getElementById('totalPrice');
+		const errorMessageEl = document.getElementById('error-message');
+		const printBtn = document.querySelector('.print-btn');
+		const backBtn = document.querySelector('.back-btn');
+
+		let items = []; // Array to store item objects {id: timestamp, name: string, price: float}
+
+		// --- Functions ---
+
+		function displayError(message) {
+			errorMessageEl.textContent = message;
+		}
+
+		function clearError() {
+			errorMessageEl.textContent = '';
+		}
+
+		function renderItems() {
+			itemListUl.innerHTML = ''; // Clear existing items
+			if (items.length === 0) {
+				const placeholderLi = document.createElement('li');
+				placeholderLi.textContent = 'Список пока пуст...';
+				placeholderLi.style.textAlign = 'center';
+				placeholderLi.style.color = 'var(--tg-theme-hint-color, #999)';
+				itemListUl.appendChild(placeholderLi);
+			} else {
+				items.forEach(item => {
+					const li = document.createElement('li');
+					
+					const nameSpan = document.createElement('span');
+					nameSpan.className = 'item-name';
+					nameSpan.textContent = item.name;
+					
+					const priceSpan = document.createElement('span');
+					priceSpan.className = 'item-price';
+					priceSpan.textContent = `${item.price.toFixed(2)}`;
+
+					const removeBtn = document.createElement('button');
+					removeBtn.className = 'remove-item-btn';
+					removeBtn.textContent = '✖';
+					removeBtn.setAttribute('aria-label', `Удалить ${item.name}`);
+					removeBtn.onclick = function() {
+						removeItem(item.id);
+					};
+
+					li.appendChild(nameSpan);
+					li.appendChild(priceSpan);
+					li.appendChild(removeBtn);
+					itemListUl.appendChild(li);
+				});
+			}
+			calculateTotal();
+			updateMainButton();
+		}
+
+		function calculateTotal() {
+			const total = items.reduce((sum, item) => sum + item.price, 0);
+			totalPriceEl.textContent = total.toFixed(2);
+			return total;
+		}
+
+		function addItem() {
+			clearError();
+			const name = itemNameInput.value.trim();
+			const priceString = itemPriceInput.value.trim();
+
+			if (!name) {
+				displayError('Пожалуйста, введите наименование товара.');
+				itemNameInput.focus();
+				return;
+			}
+			if (!priceString) {
+				displayError('Пожалуйста, введите цену товара.');
+				itemPriceInput.focus();
+				return;
+			}
+
+			const price = parseFloat(priceString);
+			if (isNaN(price) || price < 0) {
+				displayError('Цена должна быть положительным числом.');
+				itemPriceInput.focus();
+				itemPriceInput.value = ''; // Clear invalid input
+				return;
+			}
+
+			items.push({ id: Date.now(), name: name, price: price });
+			renderItems();
+
+			// Clear input fields
+			itemNameInput.value = '';
+			itemPriceInput.value = '';
+			itemNameInput.focus(); // Set focus back to item name for next entry
+		}
+
+		function removeItem(itemId) {
+			items = items.filter(item => item.id !== itemId);
+			renderItems();
+		}
+
+		function formatDataForBot() {
+			let message = "🛒 *Список покупок:*\n\n";
+			if (items.length === 0) {
+				message += "_Список пуст._";
+			} else {
+				items.forEach(item => {
+					message += `*- ${item.name}:* ${item.price.toFixed(2)}\n`;
+				});
+			}
+			message += `\n\n🧾 *Итого:* ${calculateTotal().toFixed(2)}`;
+			return {
+				items: items,
+				total: calculateTotal(),
+				formatted_message: message, // For easy display in bot (Markdown)
+				app_origin: 'calculator_app'
+			};
+		}
+		
+		function updateMainButton() {
+			if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+				if (items.length > 0) {
+					Telegram.WebApp.MainButton.setText(`Распечатать (${items.length} поз.) - ${calculateTotal().toFixed(2)}`);
+					Telegram.WebApp.MainButton.show();
+					Telegram.WebApp.MainButton.onClick(handlePrintData);
+				} else {
+					Telegram.WebApp.MainButton.hide();
+				}
+			}
+		}
+
+
+		function handlePrintData() {
+			if (items.length === 0) {
+				displayError('Список товаров пуст. Добавьте хотя бы один товар.');
+				// Optional: Telegram.WebApp.showAlert('Список товаров пуст.');
+				return;
+			}
+			clearError();
+			const dataToSend = formatDataForBot();
+
+			if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+				Telegram.WebApp.sendData(JSON.stringify(dataToSend));
+				// Telegram.WebApp.close(); // Keep app open after sending, or close if preferred
+			} else {
+				// Fallback for testing in browser
+				console.log("Data to send to bot:", dataToSend);
+				displayError('Данные выведены в консоль (Telegram WebApp не доступен).');
+			}
+		}
+
+		function handleGoBack() {
+			if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+				Telegram.WebApp.close();
+			} else {
+				// Fallback for browser if needed
+				displayError('Не удается вернуться назад (Telegram WebApp не доступен).');
+				// window.history.back(); // Could be an option for non-Telegram env
+			}
+		}
+
+		// --- Event Listeners ---
+		addItemBtn.addEventListener('click', addItem);
+		
+		// Allow adding item by pressing Enter in price field
+		itemPriceInput.addEventListener('keypress', function(event) {
+			if (event.key === 'Enter') {
+				event.preventDefault(); // Prevent form submission if it were in a form
+				addItem();
+			}
+		});
+		// Or Enter in item name field could move to price
+		 itemNameInput.addEventListener('keypress', function(event) {
+			if (event.key === 'Enter') {
+				event.preventDefault(); 
+				itemPriceInput.focus();
+			}
+		});
+
+
+		printBtn.addEventListener('click', handlePrintData);
+		backBtn.addEventListener('click', handleGoBack);
+
+		// Initial render
+		document.addEventListener('DOMContentLoaded', function() {
+			renderItems(); // To show "Список пока пуст..." initially
+			if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+				Telegram.WebApp.BackButton.onClick(handleGoBack);
+				Telegram.WebApp.BackButton.show();
+			}
+		});
+
+	</script>
+</body>
+</html>

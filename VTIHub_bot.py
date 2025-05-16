@@ -132,8 +132,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # --- Grant Access or Deny ---
     if user_can_access:
         # User is verified (either by debug mode or membership), show the main keyboard
+        # Determine the ticket app URL based on debug mode
+        ticket_app_url = WEB_APP_URLS["ticket"] # Default to standard URL
+        if debug_mode:
+            ticket_app_url = "https://vitalya-dev.github.io/VTIHub/ticket_app_debug.html"
+            logger.info(f"DEBUG MODE: Using debug ticket app URL: {ticket_app_url}")
+        
         kb = [
-            [KeyboardButton("📄 Новая Заявка", web_app=WebAppInfo(url=WEB_APP_URLS["ticket"]))]
+            [KeyboardButton("📄 Новая Заявка", web_app=WebAppInfo(url=ticket_app_url))]
         ]
         main_message = "🐶" # Your standard welcome message/emoji
         await update.message.reply_text(
@@ -483,7 +489,7 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     desc_y = _draw_text_line(draw, "Описание:", fonts["ticket_details"], body_x, desc_y)
     
     description = ticket.get("d", "")
-    wrap_width = 28 
+    wrap_width = 56 
     for line in textwrap.wrap(description, width=wrap_width):
         desc_y = _draw_text_line(draw, line, fonts["body"], body_x, desc_y)
 

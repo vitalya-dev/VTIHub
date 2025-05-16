@@ -343,7 +343,7 @@
 						return;
 				}
 
-				const combinedDescription = `Модель: ${deviceModel}\nНеисправность: ${issueDescription}\nКомплектация: ${accessories}`;
+				const combinedDescription = `${deviceModel}. ${issueDescription}. ${accessories}`;
 				const data = {
 						phone: phone, // Already validated and has original format
 						description: combinedDescription,

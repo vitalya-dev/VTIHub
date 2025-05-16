@@ -343,11 +343,15 @@
 						return;
 				}
 
-				const combinedDescription = `${deviceModel}. ${issueDescription}. ${accessories}`;
+				let combinedDescription = `${deviceModel}. ${issueDescription}`;
+				if (accessories) { // If 'accessories' is not an empty string
+					combinedDescription += `. ${accessories}`;
+				}
+
 				const data = {
-						phone: phone, // Already validated and has original format
-						description: combinedDescription,
-						app_origin: 'ticket_app'
+					phone: phone,
+					description: combinedDescription,
+					app_origin: 'ticket_app'
 				};
 
 				Telegram.WebApp.sendData(JSON.stringify(data));

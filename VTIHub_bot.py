@@ -489,9 +489,27 @@ def _generate_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image]:
     desc_y = _draw_text_line(draw, "Описание:", fonts["ticket_details"], body_x, desc_y)
     
     description = ticket.get("d", "")
-    wrap_width = 56 
-    for line in textwrap.wrap(description, width=wrap_width):
-        desc_y = _draw_text_line(draw, line, fonts["body"], body_x, desc_y)
+    wrap_width = 46
+    wrapped_lines = textwrap.wrap(description, width=wrap_width) # Get all wrapped lines
+
+    lines_to_draw = []
+    if len(wrapped_lines) > 2:
+        lines_to_draw.append(wrapped_lines[0]) # Keep the first line as is
+        # For the second line, ensure it fits and add "..."
+        # We need to make sure the "..." doesn't make the line too long.
+        # A simple approach is to take a substring of the second line and append "..."
+        # A more precise way would be to check the width with the font, but for fixed-width textwrap, this should be okay.
+        second_line_text = wrapped_lines[1]
+        if len(second_line_text) > wrap_width - 3: # Check if space is needed for "..."
+             lines_to_draw.append(second_line_text[:wrap_width-3] + "...")
+        else:
+             lines_to_draw.append(second_line_text + "...") # Or just append if there's space (less likely with textwrap)
+
+    elif len(wrapped_lines) > 0: # If 1 or 2 lines
+        lines_to_draw = wrapped_lines[:2] # Take the first two lines or the only line
+
+    for line_text in lines_to_draw:
+        desc_y = _draw_text_line(draw, line_text, fonts["body"], body_x, desc_y)
 
     return img
 

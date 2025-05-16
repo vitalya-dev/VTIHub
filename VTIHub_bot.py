@@ -175,10 +175,10 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 	# Get current time
 	try:
 		tz = pytz.timezone('Europe/Moscow')
-		current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+		current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M")
 	except pytz.UnknownTimeZoneError:
 		logger.warning("Unknown timezone 'Europe/Moscow', falling back to UTC.")
-		current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+		current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
 
 	# Extract web app data
 	phone = data.get('phone', 'N/A')
@@ -190,9 +190,9 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 		sanitized_phone_for_link = re.sub(r'\D', '', phone)
 		if sanitized_phone_for_link:
 			if len(sanitized_phone_for_link) == 11 and sanitized_phone_for_link.startswith('8'):
-				 sanitized_phone_for_link = '7' + sanitized_phone_for_link[1:]
+				sanitized_phone_for_link = '7' + sanitized_phone_for_link[1:]
 			if not sanitized_phone_for_link.startswith('+'):
-				 sanitized_phone_for_link = '+' + sanitized_phone_for_link
+				sanitized_phone_for_link = '+' + sanitized_phone_for_link
 			tel_url = f"tel:{sanitized_phone_for_link}"
 			phone_link_html = f'<a href="{tel_url}"><b><code>{phone}</code></b></a>'
 

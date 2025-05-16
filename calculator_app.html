@@ -352,7 +352,6 @@
 				});
 			}
 			calculateTotal();
-			updateMainButton();
 		}
 
 		function calculateTotal() {
@@ -400,34 +399,13 @@
 		}
 
 		function formatDataForBot() {
-			let message = "🛒 *Список покупок:*\n\n";
-			if (items.length === 0) {
-				message += "_Список пуст._";
-			} else {
-				items.forEach(item => {
-					message += `*- ${item.name}:* ${item.price.toFixed(2)}\n`;
-				});
-			}
-			message += `\n\n🧾 *Итого:* ${calculateTotal().toFixed(2)}`;
 			return {
 				items: items,
 				total: calculateTotal(),
-				formatted_message: message, // For easy display in bot (Markdown)
 				app_origin: 'calculator_app'
 			};
 		}
-		
-		function updateMainButton() {
-			if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
-				if (items.length > 0) {
-					Telegram.WebApp.MainButton.setText(`Распечатать (${items.length} поз.) - ${calculateTotal().toFixed(2)}`);
-					Telegram.WebApp.MainButton.show();
-					Telegram.WebApp.MainButton.onClick(handlePrintData);
-				} else {
-					Telegram.WebApp.MainButton.hide();
-				}
-			}
-		}
+
 
 
 		function handlePrintData() {

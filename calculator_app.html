@@ -251,7 +251,9 @@
 		<div class="input-row">
 			<div class="input-group">
 				<label for="itemName">Наименование</label>
-				<input type="text" id="itemName" placeholder="Напр: AuraByte Z990 Pro" enterkeyhint="next">
+				<input type="text" id="itemName" placeholder="Напр: AuraByte Z990 Pro" enterkeyhint="next" list="itemSuggestions">
+				<datalist id="itemSuggestions">
+				</datalist>
 			</div>
 
 			<div class="input-group" style="flex-basis: 120px; flex-grow: 0;">
@@ -308,6 +310,38 @@
 		let items = []; // Array to store item objects {id: timestamp, name: string, price: float}
 
 		// --- Functions ---
+
+		 const itemSuggestionsDatalist = document.getElementById('itemSuggestions');
+
+		// Function to fetch and parse items.txt then populate the datalist
+		async function populateItemSuggestions() {
+			try {
+				const response = await fetch('items.txt'); // Make sure items.txt is in the same directory
+				if (!response.ok) {
+					console.error('Failed to fetch items.txt:', response.statusText);
+					// Optionally, handle the error more visibly to the user
+					return;
+				}
+				const text = await response.text();
+				const suggestions = text.split('\n')
+									  .map(item => item.trim())
+									  .filter(item => item.length > 0);
+
+				// Clear any existing options
+				itemSuggestionsDatalist.innerHTML = '';
+
+				// Populate the datalist
+				suggestions.forEach(suggestion => {
+					const option = document.createElement('option');
+					option.value = suggestion;
+					itemSuggestionsDatalist.appendChild(option);
+				});
+				// console.log('Datalist populated with suggestions.'); // For debugging
+
+			} catch (error) {
+				console.error('Error fetching or parsing items.txt for datalist:', error);
+			}
+		}
 		
 		function displayError(message) {
 			errorMessageEl.textContent = message;
@@ -461,6 +495,7 @@
 
 		// Initial render
 		document.addEventListener('DOMContentLoaded', function() {
+			populateItemSuggestions();
 			renderItems(); // To show "Список пока пуст..." initially
 			if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
 				Telegram.WebApp.BackButton.onClick(handleGoBack);

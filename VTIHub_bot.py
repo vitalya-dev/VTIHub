@@ -364,7 +364,7 @@ async def process_calculator_app_data(update: Update, context: ContextTypes.DEFA
 		message_parts.append(f"\n\n{CALC_DATA_MARKER} {base64_encoded_json_for_message}") # Add to message
 		
 		print_button = InlineKeyboardButton(
-			"🖨️ Распечатать", 
+			"🖨️ Print", 
 			callback_data="print:parse_calculator_encoded" # Simple callback data
 		)
 			

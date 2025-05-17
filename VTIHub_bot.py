@@ -364,7 +364,7 @@ async def process_calculator_app_data(update: Update, context: ContextTypes.DEFA
 		message_parts.append(f"\n\n{CALC_DATA_MARKER} {base64_encoded_json_for_message}") # Add to message
 		
 		print_button = InlineKeyboardButton(
-			"🖨️ Распечатать чек", 
+			"🖨️ Распечатать", 
 			callback_data="print:parse_calculator_encoded" # Simple callback data
 		)
 			
@@ -775,7 +775,7 @@ async def handle_ticket_print_callback(update: Update, context: ContextTypes.DEF
 	try:
 		ticket_data = _parse_ticket_data(query.message.text) 
 		if ticket_data is None:
-			await query.message.reply_text(MSG_ERR_NO_DATA if not query.message.text or DATA_MARKER not in query.message.text else MSG_ERR_DECODE)
+			await query.message.reply_text(MSG_ERR_NO_DATA if not query.message.text or TICKETS_DATA_MARKER not in query.message.text else MSG_ERR_DECODE)
 			return
 		label_image = _generate_ticket_label_image(ticket_data)
 		if label_image is None:
@@ -892,7 +892,6 @@ async def handle_calculator_print_callback(update: Update, context: ContextTypes
 			)
 			if result.returncode == 0:
 				logger.info(f"IrfanView print command successful for {file_path}. Output: {result.stdout}")
-				await query.message.reply_text(f"✅ Чек отправлен на принтер: {printer_name}")
 			else:
 				logger.error(f"IrfanView print command failed for {file_path}. RC: {result.returncode}. Err: {result.stderr}. Out: {result.stdout}")
 				await query.message.reply_text(f"⚠️ Ошибка печати чека. Код: {result.returncode}. Проверьте логи.")

@@ -635,8 +635,9 @@ MAX_ITEMS_ON_LABEL = 14 # Adjust based on testing and desired font size
 
 def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Image.Image]:
 	try:
-		fonts = _load_fonts() # Reuse existing font loading
+		fonts = _load_fonts()
 	except IOError:
+		logger.error("Failed to load fonts for calculator label.")
 		return None
 
 	img = Image.new("RGB", (LABEL_WIDTH_PX, LABEL_HEIGHT_PX), BACKGROUND_COLOR)
@@ -644,86 +645,136 @@ def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Imag
 	margin_px = mm2px(MARGIN_MM)
 	current_y = margin_px
 
+	# --- Header Section (Copied and adapted from _generate_ticket_label_image) ---
+	try:
+		logo = Image.open(LOGO_PATH).convert("RGBA")
+		logo_size_px = mm2px(LOGO_SIZE_MM)
+		# Calculate position to center logo horizontally if desired, or keep left aligned
+		# For simplicity, keeping it left-aligned similar to ticket
+		img.paste(logo, (margin_px, margin_px), logo) # Pasting logo at top-left margin
+		header_text_x = margin_px + logo_size_px + mm2px(1) # Text starts after logo
+		header_y = margin_px # Start header text at the top margin
+
+		# Draw header text lines
+		header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
+		header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y)
+		header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y)
+		header_y = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y)
+
+		# Calculate banner position based on the taller of logo or text block
+		banner_height = max(margin_px + logo_size_px, header_y) + mm2px(1)
+		draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
+		current_y = banner_height + mm2px(2) # Update current_y to be below the header banner
+	except FileNotFoundError:
+		logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo for calculator label.")
+		# Fallback if logo is not found - draw text starting from margin
+		header_text_x = margin_px
+		header_y = margin_px
+		header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
+		header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y)
+		header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y)
+		
+		banner_height = header_y + mm2px(1) # Calculate banner position without logo
+		draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
+		current_y = banner_height + mm2px(2)
+	except Exception as e:
+		logger.error(f"Error drawing header for calculator label: {e}")
+		# If header fails, we might want to return None or continue without a header
+		# For now, let's assume we start drawing items from the top margin if header fails catastrophically
+		current_y = margin_px
+
+
 	# --- Calculator Details Section ---
 	body_x = margin_px
-	
+	# current_y is already set after the header
+
 	items_list = calc_data.get('items', [])
 	total_amount = calc_data.get('total', 0.0)
 
 	# --- Items List ---
 	price_area_width_px = mm2px(15) # Reserve space for price on the right
 
+	# Use "body" font for items
+	item_font = fonts["body"] # CHANGED FONT HERE
+	item_font_small = fonts["small"] # For truncation message
+
+
+	# Estimate height needed for total and separator
+	total_label_text = "Итого:" # Text for measuring
+	total_line_height_estimate = item_font.getmetrics()[0] + item_font.getmetrics()[1] + LINE_SPACING + mm2px(2) # Height of total line
+	separator_height = mm2px(1) + LINE_SPACING # Height of separator line + spacing
+	# Check if there's enough space for the current item and the total line
+	# This needs to be more dynamic based on actual text height
+	ascent, descent = item_font.getmetrics()
+	item_line_height = ascent + descent + LINE_SPACING // 2
+
 	for i, item_data in enumerate(items_list):
-		if i >= MAX_ITEMS_ON_LABEL:
-			available_height_for_trunc_msg = LABEL_HEIGHT_PX - current_y - margin_px - fonts["small"].getbbox("Итого:")[3] - mm2px(2)
-			if fonts["small"].getbbox("...и еще")[3] < available_height_for_trunc_msg: # Check if truncation message fits
-				_draw_text_line(draw, f"...и еще {len(items_list) - MAX_ITEMS_ON_LABEL} товар(ов)", fonts["small"], body_x, current_y)
+		if current_y + item_line_height + separator_height + total_line_height_estimate > LABEL_HEIGHT_PX - margin_px:
+			# Not enough space for this item AND the total section
+			# Draw truncation message if not all items are displayed
+			if i < len(items_list):
+				trunc_msg = f"...и еще {len(items_list) - i} товар(ов)"
+				# Check if truncation message fits
+				if current_y + item_font_small.getmetrics()[0] + item_font_small.getmetrics()[1] < LABEL_HEIGHT_PX - margin_px - total_line_height_estimate - separator_height:
+					_draw_text_line(draw, trunc_msg, item_font_small, body_x, current_y)
+					current_y += item_font_small.getmetrics()[0] + item_font_small.getmetrics()[1] + LINE_SPACING // 2
+			break # Stop adding items
+
+		if i >= MAX_ITEMS_ON_LABEL : # Fallback hard limit
+			# This check might be redundant if the height check above is effective
+			available_height_for_trunc_msg = LABEL_HEIGHT_PX - current_y - margin_px - total_line_height_estimate - separator_height
+			if item_font_small.getbbox("...и еще")[3] < available_height_for_trunc_msg:
+				_draw_text_line(draw, f"...и еще {len(items_list) - MAX_ITEMS_ON_LABEL} товар(ов)", item_font_small, body_x, current_y)
+				current_y += item_font_small.getmetrics()[0] + item_font_small.getmetrics()[1] + LINE_SPACING // 2
 			break
+
 
 		item_name = item_data.get('name', 'N/A')
 		item_price = item_data.get('price', 0.0)
 		
-		# Wrap item name if too long
-		# Pillow's textwrap is not available directly, so manual check or simple split
-		# For simplicity, we'll truncate with ellipsis if it's too wide.
-		# A more robust way would be to check textsize().
-		
-		max_name_width = LABEL_WIDTH_PX - (2 * margin_px) - price_area_width_px - mm2px(2) # available width for name
+		max_name_width = LABEL_WIDTH_PX - (2 * margin_px) - price_area_width_px - mm2px(2)
 		
 		# Truncate item name if it's too long
-		avg_char_width = fonts["small"].getbbox("x")[2] # Approximate width of one character
-		if avg_char_width > 0 and len(item_name) * avg_char_width > max_name_width:
-			max_chars = int(max_name_width / avg_char_width) - 3 # -3 for "..."
-			display_name = item_name[:max_chars] + "..."
-		else:
-			display_name = item_name
+		# This truncation logic might need refinement with the new font
+		display_name = item_name
+		# Check actual width of the text
+		if item_font.getlength(display_name) > max_name_width:
+			# Simple character based truncation, might need to be smarter
+			avg_char_width_approx = item_font.getlength("X") # Approximate
+			if avg_char_width_approx > 0:
+				max_chars = int(max_name_width / avg_char_width_approx)
+				if len(display_name) > max_chars :
+					display_name = display_name[:max_chars - 3] + "..." if max_chars > 3 else display_name[:max_chars]
+
 
 		# Draw item name (left aligned)
-		draw.text((body_x, current_y), display_name, font=fonts["small"], fill=TEXT_COLOR)
+		draw.text((body_x, current_y), display_name, font=item_font, fill=TEXT_COLOR)
 		
 		# Draw item price (right aligned)
 		price_text = f"{item_price:.2f}"
-		price_text_width = fonts["small"].getbbox(price_text)[2] 
-		price_x = LABEL_WIDTH_PX - margin_px - price_text_width
-		draw.text((price_x, current_y), price_text, font=fonts["small"], fill=TEXT_COLOR)
+		price_text_length = item_font.getlength(price_text)
+		price_x = LABEL_WIDTH_PX - margin_px - price_text_length
+		draw.text((price_x, current_y), price_text, font=item_font, fill=TEXT_COLOR)
 
-		ascent, descent = fonts["small"].getmetrics()
-		current_y += ascent + descent + LINE_SPACING // 2 # Smaller line spacing for items
+		current_y += item_line_height
 		
-		if current_y + fonts["small"].getbbox("Итого:")[3] + mm2px(2) > LABEL_HEIGHT_PX - margin_px: # Check if total will fit
-			if i < len(items_list) -1: # if there are more items not drawn
-				 # Overwrite the last drawn item with a truncation message if it was not the actual last item
-				current_y -= (ascent + descent + LINE_SPACING // 2) # backtrack
-				draw.rectangle( # Clear previous text line
-					(body_x, current_y, LABEL_WIDTH_PX - margin_px, current_y + ascent + descent + LINE_SPACING // 2),
-					fill=BACKGROUND_COLOR
-				)
-				available_height_for_trunc_msg = LABEL_HEIGHT_PX - current_y - margin_px - fonts["small"].getbbox("Итого:")[3] - mm2px(2)
-				if fonts["small"].getbbox("...и еще")[3] < available_height_for_trunc_msg:
-					_draw_text_line(draw, f"...и еще {len(items_list) - i} товар(ов)", fonts["small"], body_x, current_y)
-			break
+		# This inner break condition might be too aggressive or needs re-evaluation with new font.
 
-
-	current_y += mm2px(2) # Space before total
 
 	# --- Total Amount ---
-	# Ensure total is not drawn off label
-	total_text_height = fonts["small"].getbbox(f"Итого: {total_amount:.2f}")[3]
-	if current_y + total_text_height > LABEL_HEIGHT_PX - margin_px:
-		# If total doesn't fit, try to move it up a bit, or it might be cut off.
-		# This part needs careful adjustment based on actual label space.
-		# For now, we draw it; if it's cut, layout or MAX_ITEMS_ON_LABEL needs tuning.
-		pass
-
-	_draw_text_line(draw, "----------------------------------", fonts["body"], body_x, current_y, color=BORDER_COLOR) # Separator line
-	current_y += mm2px(1)
+	# Ensure there's a little space before the separator line, if not already handled by item loop break
+	if current_y + separator_height + total_line_height_estimate < LABEL_HEIGHT_PX - margin_px:
+		current_y += mm2px(1) # Small space before total separator
+		_draw_text_line(draw, "----------------------------------", fonts["body"], body_x, current_y, color=BORDER_COLOR) # Separator line
+		current_y += mm2px(1) # Space after separator, before total text. Adjust LINE_SPACING in _draw_text_line if this is too much
 	
-	total_str = f"Итого: {total_amount:.2f}"
-	total_text_bbox = fonts["small"].getbbox(total_str)
-	total_width = total_text_bbox[2] - total_text_bbox[0]
-	total_x = LABEL_WIDTH_PX - margin_px - total_width # Right align total
-	
-	_draw_text_line(draw, total_str, fonts["small"], int(total_x), current_y, color=TEXT_COLOR)
+		total_str = f"Итого: {total_amount:.2f}"
+		total_text_length = item_font.getlength(total_str) # Use item_font or a specific total_font
+		total_x = LABEL_WIDTH_PX - margin_px - total_text_length # Right align total
+		
+		_draw_text_line(draw, total_str, item_font, int(total_x), current_y, color=TEXT_COLOR)
+	else:
+		logger.warning("Not enough space to draw the total amount on calculator label.")
 
 	return img
 

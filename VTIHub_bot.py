@@ -238,17 +238,6 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 			phone_link_html = f'<a href="{tel_url}"><b><code>{formatted_phone_display}</code></b></a>'
 
 
-
-	# Generate search hints (uses raw_phone to get digits for hints)
-	search_hints = ""
-	if raw_phone and raw_phone != 'N/A':
-		numeric_phone = re.sub(r'\D', '', raw_phone)
-		hints_list = []
-		if len(numeric_phone) >= 2: hints_list.append(numeric_phone[-2:])
-		if len(numeric_phone) >= 3: hints_list.append(numeric_phone[-3:])
-		if len(numeric_phone) >= 4: hints_list.append(numeric_phone[-4:])
-		search_hints = " ".join(sorted(set(hints_list), key=len))
-
 	# Prepare ticket data for encoding (use raw_phone here as it's for data storage)
 	ticket_details_to_encode = {
 		'p': raw_phone, # Store the original/raw phone for data integrity
@@ -279,7 +268,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 				f"👤 Отправил(а): {user_identifier}\n"
 				f"🕒 Время: {current_time}\n"
 				f"--- Детали заявки ---\n"
-				f"📞 Телефон: {phone_link_html} (Поиск: {search_hints})\n"
+				f"📞 Телефон: {phone_link_html}\n"
 				f"📝 Описание: {description}\n\n"
 				f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
 			)
@@ -314,7 +303,7 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 			f"👤 Отправил(а): {user_identifier}\n"
 			f"🕒 Время: {current_time}\n"
 			f"--- Детали заявки ---\n"
-			f"📞 Телефон: {phone_link_html} (Поиск: {search_hints})\n"
+			f"📞 Телефон: {phone_link_html}\n"
 			f"📝 Описание: {description}\n\n"
 			f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
 		]

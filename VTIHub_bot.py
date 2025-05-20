@@ -165,6 +165,32 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 		)
 
 
+def format_phone_number_display(phone_str: str) -> str:
+    """
+    Formats a raw phone number string into a more readable format,
+    assuming input is either +7xxxxxxxxxx or 8xxxxxxxxxx.
+    e.g., "+71234567890" -> "+7 (123) 456-78-90"
+    e.g., "81234567890" -> "8 (123) 456-78-90"
+    """
+    if not phone_str or phone_str == 'N/A':
+        return 'N/A'
+
+    # Remove common non-numeric characters except '+' if it's leading.
+    # This is a safety net; ideally, inputs are already clean.
+    cleaned_phone = re.sub(r'[^\d+]', '', phone_str)
+
+    if cleaned_phone.startswith('+7') and len(cleaned_phone) == 12:
+        # Format: +7 (XXX) XXX-XX-XX
+        return f"{cleaned_phone[:2]} ({cleaned_phone[2:5]}) {cleaned_phone[5:8]}-{cleaned_phone[8:10]}-{cleaned_phone[10:12]}"
+    elif cleaned_phone.startswith('8') and len(cleaned_phone) == 11:
+        # Format: 8 (XXX) XXX-XX-XX
+        return f"{cleaned_phone[0]} ({cleaned_phone[1:4]}) {cleaned_phone[4:7]}-{cleaned_phone[7:9]}-{cleaned_phone[9:11]}"
+    else:
+        # Fallback: If the format is unexpectedly different, return the cleaned version
+        # or the original. This helps prevent errors if an odd format slips through.
+        # Given your strict input rules, this path should ideally not be taken.
+        return phone_str
+
 # --- Data Processing Functions ---
 
 async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict):
@@ -192,34 +218,40 @@ async def process_ticket_app_data(update: Update, context: ContextTypes.DEFAULT_
 		current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
 
 	# Extract web app data
-	phone = data.get('phone', 'N/A')
+	raw_phone = data.get('phone', 'N/A') # Get the raw phone number
 	description = data.get('description', 'No description provided.')
 
-	# --- Format phone number for tel: link and display ---
-	phone_link_html = phone # Default to original text if sanitization fails or N/A
-	if phone and phone != 'N/A':
-		sanitized_phone_for_link = re.sub(r'\D', '', phone)
-		if sanitized_phone_for_link:
-			if len(sanitized_phone_for_link) == 11 and sanitized_phone_for_link.startswith('8'):
-				sanitized_phone_for_link = '7' + sanitized_phone_for_link[1:]
-			if not sanitized_phone_for_link.startswith('+'):
-				sanitized_phone_for_link = '+' + sanitized_phone_for_link
-			tel_url = f"tel:{sanitized_phone_for_link}"
-			phone_link_html = f'<a href="{tel_url}"><b><code>{phone}</code></b></a>'
+	# Format phone for display
+	formatted_phone_display = format_phone_number_display(raw_phone) # Use the new function
 
-	# Generate search hints
+# --- Format phone number for tel: link ---
+	phone_link_html = f'<b><code>{formatted_phone_display}</code></b>' # Default: just display formatted number
+
+	if raw_phone and raw_phone != 'N/A':
+		tel_url_number = None
+		if raw_phone.startswith('+7') and len(raw_phone) == 12:
+			tel_url_number = raw_phone  # Already in +7xxxxxxxxxx format
+		elif raw_phone.startswith('8') and len(raw_phone) == 11:
+			tel_url_number = '+7' + raw_phone[1:] # Convert 8xxxxxxxxxx to +7xxxxxxxxxx
+		if tel_url_number:
+			tel_url = f"tel:{tel_url_number}"
+			phone_link_html = f'<a href="{tel_url}"><b><code>{formatted_phone_display}</code></b></a>'
+
+
+
+	# Generate search hints (uses raw_phone to get digits for hints)
 	search_hints = ""
-	if phone and phone != 'N/A':
-		numeric_phone = re.sub(r'\D', '', phone)
+	if raw_phone and raw_phone != 'N/A':
+		numeric_phone = re.sub(r'\D', '', raw_phone)
 		hints_list = []
 		if len(numeric_phone) >= 2: hints_list.append(numeric_phone[-2:])
 		if len(numeric_phone) >= 3: hints_list.append(numeric_phone[-3:])
 		if len(numeric_phone) >= 4: hints_list.append(numeric_phone[-4:])
 		search_hints = " ".join(sorted(set(hints_list), key=len))
 
-	# Prepare ticket data for encoding
+	# Prepare ticket data for encoding (use raw_phone here as it's for data storage)
 	ticket_details_to_encode = {
-		'p': phone,
+		'p': raw_phone, # Store the original/raw phone for data integrity
 		'd': description,
 		's': user_identifier,
 		't': current_time
@@ -594,7 +626,9 @@ def _generate_ticket_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image
 	display_identifier = format_identifier_partial(raw_identifier, keep_chars=6)
 
 	body_y = _draw_text_line(draw, f"Принял(а): {display_identifier}", fonts["ticket_details"], body_x, body_y)
-	body_y = _draw_text_line(draw, f"Телефон: {ticket.get('p', 'N/A')}", fonts["ticket_details"], body_x, body_y) 
+	raw_phone_for_label = ticket.get('p', 'N/A')
+	formatted_phone_for_label = format_phone_number_display(raw_phone_for_label) # Use the new function
+	body_y = _draw_text_line(draw, f"Телефон: {formatted_phone_for_label}", fonts["ticket_details"], body_x, body_y) 
 	body_y = _draw_text_line(draw, f"Время: {ticket.get('t', 'N/A')}", fonts["ticket_details"], body_x, body_y)
 
 

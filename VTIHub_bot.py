@@ -1244,13 +1244,12 @@ class DatabaseChangeHandler(FileSystemEventHandler):
 		super().__init__()
 		self.application = application
 		self.db_path = db_path
-		self.loop = asyncio.get_event_loop() # Get the loop where PTB is running
 		self._last_processed_event_time = 0 # To avoid rapid duplicate processing
 		self._processing_lock = asyncio.Lock() # Ensure only one processing occurs at a time
 
 
 	def on_modified(self, event):
-		if event.is_directory or event.src_path != os.path.abspath(self.db_path):
+		if event.is_directory or event.src_path != os.path.realpath(self.db_path):
 			return
 
 		current_time = time.time()
@@ -1359,7 +1358,7 @@ if __name__ == "__main__":
 	# --- Database Monitoring Setup ---
 	observer = None
 	if args.db_file:
-		DB_FILE_PATH = os.path.abspath(args.db_file) # Store absolute path
+		DB_FILE_PATH = os.path.realpath(args.db_file) # Store absolute path
 		if os.path.exists(DB_FILE_PATH):
 			logger.info(f"Database monitoring ENABLED for: {DB_FILE_PATH}")
 			# Initialize last known ID

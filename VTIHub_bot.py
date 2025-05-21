@@ -14,6 +14,13 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 
+import sqlite3
+import time # For handling potential rapid file changes if needed
+import telegram
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import asyncio # For thread-safe operations with PTB
+
 # Import necessary components from python-telegram-bot
 from telegram import (
 	error,
@@ -57,6 +64,14 @@ TICKETS_DATA_MARKER = "Encoded Data:" # For tickets
 CALC_DATA_MARKER = "Calculator Encoded Data:" # For calculator data
 
 logger = logging.getLogger(__name__)
+
+
+# --- Database Monitoring Configuration ---
+DB_FILE_PATH = None # To be set by command-line argument
+LAST_KNOWN_DB_CASE_ID_KEY = "last_known_db_case_id"
+# How often to check the database after a modification event is detected (in seconds)
+# This helps to wait for writes to complete and avoid processing partial data.
+DB_PROCESSING_DELAY = 2
 
 # --- Bot Setup Functions ---
 
@@ -166,30 +181,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def format_phone_number_display(phone_str: str) -> str:
-    """
-    Formats a raw phone number string into a more readable format,
-    assuming input is either +7xxxxxxxxxx or 8xxxxxxxxxx.
-    e.g., "+71234567890" -> "+7 (123) 456-78-90"
-    e.g., "81234567890" -> "8 (123) 456-78-90"
-    """
-    if not phone_str or phone_str == 'N/A':
-        return 'N/A'
+	"""
+	Formats a raw phone number string into a more readable format,
+	assuming input is either +7xxxxxxxxxx or 8xxxxxxxxxx.
+	e.g., "+71234567890" -> "+7 (123) 456-78-90"
+	e.g., "81234567890" -> "8 (123) 456-78-90"
+	"""
+	if not phone_str or phone_str == 'N/A':
+		return 'N/A'
 
-    # Remove common non-numeric characters except '+' if it's leading.
-    # This is a safety net; ideally, inputs are already clean.
-    cleaned_phone = re.sub(r'[^\d+]', '', phone_str)
+	# Remove common non-numeric characters except '+' if it's leading.
+	# This is a safety net; ideally, inputs are already clean.
+	cleaned_phone = re.sub(r'[^\d+]', '', phone_str)
 
-    if cleaned_phone.startswith('+7') and len(cleaned_phone) == 12:
-        # Format: +7 (XXX) XXX-XX-XX
-        return f"{cleaned_phone[:2]} ({cleaned_phone[2:5]}) {cleaned_phone[5:8]}-{cleaned_phone[8:10]}-{cleaned_phone[10:12]}"
-    elif cleaned_phone.startswith('8') and len(cleaned_phone) == 11:
-        # Format: 8 (XXX) XXX-XX-XX
-        return f"{cleaned_phone[0]} ({cleaned_phone[1:4]}) {cleaned_phone[4:7]}-{cleaned_phone[7:9]}-{cleaned_phone[9:11]}"
-    else:
-        # Fallback: If the format is unexpectedly different, return the cleaned version
-        # or the original. This helps prevent errors if an odd format slips through.
-        # Given your strict input rules, this path should ideally not be taken.
-        return phone_str
+	if cleaned_phone.startswith('+7') and len(cleaned_phone) == 12:
+		# Format: +7 (XXX) XXX-XX-XX
+		return f"{cleaned_phone[:2]} ({cleaned_phone[2:5]}) {cleaned_phone[5:8]}-{cleaned_phone[8:10]}-{cleaned_phone[10:12]}"
+	elif cleaned_phone.startswith('8') and len(cleaned_phone) == 11:
+		# Format: 8 (XXX) XXX-XX-XX
+		return f"{cleaned_phone[0]} ({cleaned_phone[1:4]}) {cleaned_phone[4:7]}-{cleaned_phone[7:9]}-{cleaned_phone[9:11]}"
+	else:
+		# Fallback: If the format is unexpectedly different, return the cleaned version
+		# or the original. This helps prevent errors if an odd format slips through.
+		# Given your strict input rules, this path should ideally not be taken.
+		return phone_str
 
 # --- Data Processing Functions ---
 
@@ -1014,6 +1029,277 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
 			"⚠️ An unexpected error occurred. Please try again later via /start."
 		)
 
+
+def connect_db(db_path: str) -> Optional[sqlite3.Connection]:
+	"""Establishes a connection to the SQLite database."""
+	try:
+		conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True) # Read-only connection
+		conn.row_factory = sqlite3.Row # Access columns by name
+		logger.info(f"Successfully connected to database (read-only): {db_path}")
+		return conn
+	except sqlite3.Error as e:
+		logger.error(f"Error connecting to database {db_path}: {e}")
+		return None
+
+def get_initial_max_case_id(db_path: str) -> int:
+	"""Gets the maximum primkey_case from the database on startup."""
+	conn = connect_db(db_path)
+	max_id = 0
+	if conn:
+		try:
+			cursor = conn.cursor()
+			cursor.execute("SELECT MAX(primkey_case) FROM cases")
+			result = cursor.fetchone()
+			if result and result[0] is not None:
+				max_id = int(result[0])
+				logger.info(f"Initial maximum primkey_case from DB: {max_id}")
+			else:
+				logger.info("No cases found in DB or primkey_case is NULL, starting with 0.")
+		except sqlite3.Error as e:
+			logger.error(f"Error fetching max primkey_case: {e}")
+		finally:
+			conn.close()
+	return max_id
+
+def get_new_cases_from_db(db_path: str, last_id: int) -> list[sqlite3.Row]:
+	"""Fetches new cases from the database with primkey_case > last_id,
+	   including fellow's nickname."""
+	conn = connect_db(db_path)
+	new_cases = []
+	if conn:
+		try:
+			cursor = conn.cursor()
+			# Updated query to LEFT JOIN with fellows table
+			query = """
+				SELECT 
+					c.primkey_case, c.case_number, c.department, c.type, c.manufacturer, 
+					c.model, c.serial, c.reason, c.equipment, c.defects, c.condition, 
+					c.fellow, c.client, c.phone, c.dp_phone, c.date_input, 
+					c.note_output, c.client_text,
+					f.fellow_nickname, f.fellow_name 
+				FROM cases c
+				LEFT JOIN fellows f ON c.fellow = f.primkey_fellow
+				WHERE c.primkey_case > ?
+				ORDER BY c.primkey_case ASC
+			"""
+			cursor.execute(query, (last_id,))
+			new_cases = cursor.fetchall()
+			if new_cases:
+				logger.info(f"Fetched {len(new_cases)} new case(s) from DB since ID {last_id} (with fellow info).")
+		except sqlite3.Error as e:
+			logger.error(f"Error fetching new cases from DB (with fellow info): {e}")
+		finally:
+			conn.close()
+	return new_cases
+
+def format_unix_timestamp(ts: Optional[int]) -> str:
+	"""Formats a Unix timestamp into a human-readable string (Moscow time)."""
+	if ts is None:
+		return "N/A"
+	try:
+		tz = pytz.timezone('Europe/Moscow')
+		return datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M")
+	except pytz.UnknownTimeZoneError:
+		logger.warning("Unknown timezone 'Europe/Moscow' for DB timestamp, falling back to UTC.")
+		return datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M (UTC)")
+	except Exception:
+		return str(ts) # Fallback
+
+async def process_and_send_db_case(
+	bot: telegram.Bot,
+	case_data: sqlite3.Row,
+	context: ContextTypes.DEFAULT_TYPE
+) -> None:
+	"""
+	Processes a single case from the database and sends it as a ticket message.
+	"""
+	logger.info(f"Processing database case ID: {case_data['primkey_case']}")
+
+	# --- User Identifier (remains the same as previous update) ---
+	submitter_id = case_data['fellow']
+	fellow_nickname = case_data['fellow_nickname']
+	fellow_name = case_data['fellow_name']
+	user_identifier = "DB Sync"
+	if fellow_nickname:
+		user_identifier = fellow_nickname
+	elif fellow_name:
+		user_identifier = fellow_name
+	elif submitter_id:
+		user_identifier = f"Сотрудник ID: {submitter_id}"
+
+	# --- Time (remains the same) ---
+	formatted_time = format_unix_timestamp(case_data['date_input'])
+
+	# --- Phone Number (remains the same) ---
+	raw_phone_db = case_data['phone'] if case_data['phone'] else case_data['dp_phone']
+	raw_phone_str = str(raw_phone_db) if raw_phone_db is not None else 'N/A'
+	formatted_phone_display = format_phone_number_display(raw_phone_str)
+	phone_link_html = f'<b><code>{formatted_phone_display}</code></b>'
+	if raw_phone_str and raw_phone_str != 'N/A':
+		tel_url_number = None
+		if raw_phone_str.startswith('+7') and len(raw_phone_str) == 12:
+			tel_url_number = raw_phone_str
+		elif (raw_phone_str.startswith('8') or raw_phone_str.startswith('7')) and len(raw_phone_str) == 11:
+			if raw_phone_str.startswith('8'):
+				tel_url_number = '+7' + raw_phone_str[1:]
+			elif raw_phone_str.startswith('7'):
+				tel_url_number = '+' + raw_phone_str
+		if tel_url_number:
+			tel_url = f"tel:{tel_url_number}"
+			phone_link_html = f'<a href="{tel_url}"><b><code>{formatted_phone_display}</code></b></a>'
+
+	# --- New Description Logic ---
+	# Map DB fields to the conceptual fields from the HTML form
+
+	# 1. Conceptual "deviceModel" from DB fields
+	db_device_model_parts = []
+	if case_data['type']: db_device_model_parts.append(case_data['type'])
+	if case_data['manufacturer']: db_device_model_parts.append(case_data['manufacturer'])
+	if case_data['model']: db_device_model_parts.append(case_data['model'])
+	if case_data['serial']: db_device_model_parts.append(f"(S/N: {case_data['serial']})")
+	# Fallback if all parts for device model are empty
+	html_form_deviceModel_db = " ".join(filter(None, db_device_model_parts)).strip()
+	if not html_form_deviceModel_db:
+		html_form_deviceModel_db = "Модель техники не указана"
+
+	# 2. Conceptual "issueDescription" from DB fields
+	db_issue_desc_parts = []
+	if case_data['reason']: db_issue_desc_parts.append(case_data['reason'])
+	# Fallback if all parts for issue description are empty
+	html_form_issueDescription_db = ". ".join(filter(None, db_issue_desc_parts)).strip()
+	if not html_form_issueDescription_db:
+		html_form_issueDescription_db = "Характер неисправности не указан"
+
+	# 3. Conceptual "accessories" from DB field
+	html_form_accessories_db = (case_data['equipment'] or "").strip()
+
+	# Construct the description string following the HTML logic
+	description = f"{html_form_deviceModel_db}. {html_form_issueDescription_db}"
+	if html_form_accessories_db:
+		description += f". {html_form_accessories_db}"
+
+	# Clean up potential multiple periods or space-period issues
+	description = re.sub(r'\s*\.\s*', '. ', description) # Standardize period followed by space
+	description = re.sub(r'\.{2,}', '.', description)    # Replace multiple periods with a single one
+	description = description.strip().rstrip('.')        # Strip whitespace and remove trailing period for consistency
+	if description:                                      # Add a final period if there's content
+		description += "."
+
+	if not description or description == ".": # Fallback if description is still empty or just a period
+		description = "Детальное описание по заявке из БД отсутствует."
+	# --- End of New Description Logic ---
+
+	# --- Prepare data for encoding (for potential "Print" button) ---
+	ticket_details_to_encode = {
+		'p': raw_phone_str,
+		'd': description, # Use the newly formatted description
+		's': user_identifier,
+		't': formatted_time,
+	}
+
+	base64_encoded_json = ""
+	try:
+		json_string = json.dumps(ticket_details_to_encode, separators=(',', ':'), ensure_ascii=False)
+		base64_encoded_json = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
+	except Exception as e:
+		logger.error(f"Failed to encode DB ticket details (ID: {case_data['primkey_case']}): {e}", exc_info=True)
+
+	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_encoded")
+	keyboard = InlineKeyboardMarkup([[print_button]])
+
+	message_text = (
+		f"✅ Заявка из БД (№{case_data['case_number'] or case_data['primkey_case']}) создана!\n\n"
+		f"👤 Принял(а) по БД: {user_identifier}\n"
+		f"🕒 Время по БД: {formatted_time}\n"
+		f"👤 Клиент по БД: {case_data['client'] or 'N/A'}\n"
+		f"--- Детали заявки ---\n"
+		f"📞 Телефон: {phone_link_html}\n"
+		f"📝 Описание:\n{description}\n\n" # Display the new description here
+	)
+	if base64_encoded_json:
+		message_text += f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
+
+	# --- Sending logic (remains the same) ---
+	debug_mode = context.bot_data.get('debug_mode', False)
+	if not debug_mode and TARGET_CHANNEL_ID:
+		try:
+			await bot.send_message(
+				chat_id=TARGET_CHANNEL_ID,
+				text=message_text,
+				reply_markup=keyboard,
+				parse_mode=ParseMode.HTML,
+				disable_web_page_preview=True
+			)
+			logger.info(f"DB Ticket (Case ID: {case_data['primkey_case']}) posted to channel {TARGET_CHANNEL_ID}")
+		except Exception as e_channel:
+			logger.error(f"Failed to send DB Ticket (Case ID: {case_data['primkey_case']}) TO CHANNEL {TARGET_CHANNEL_ID}: {e_channel}", exc_info=True)
+	elif debug_mode:
+		logger.info(f"DEBUG MODE: Suppressed message to channel for DB Ticket (Case ID: {case_data['primkey_case']}). Content:\n{message_text}")
+	elif not TARGET_CHANNEL_ID:
+		logger.warning("TARGET_CHANNEL_ID is not set. Cannot send DB ticket to channel.")
+
+
+class DatabaseChangeHandler(FileSystemEventHandler):
+	def __init__(self, application: Application, db_path: str):
+		super().__init__()
+		self.application = application
+		self.db_path = db_path
+		self.loop = asyncio.get_event_loop() # Get the loop where PTB is running
+		self._last_processed_event_time = 0 # To avoid rapid duplicate processing
+		self._processing_lock = asyncio.Lock() # Ensure only one processing occurs at a time
+
+
+	def on_modified(self, event):
+		if event.is_directory or event.src_path != os.path.abspath(self.db_path):
+			return
+
+		current_time = time.time()
+		# Simple debounce: if a modification happened very recently, skip.
+		if current_time - self._last_processed_event_time < DB_PROCESSING_DELAY:
+			logger.debug(f"DB modification event for {event.src_path} too soon, skipping.")
+			return
+		self._last_processed_event_time = current_time
+		
+		logger.info(f"Database file {event.src_path} has been modified. Scheduling check.")
+		
+		# Schedule the processing using job_queue to run in PTB's async context
+		self.application.job_queue.run_once(
+			self.process_db_changes_callback,
+			when=DB_PROCESSING_DELAY, # Delay slightly to ensure file write is complete
+			name=f"db_check_{current_time}"
+		)
+
+	async def process_db_changes_callback(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+		"""Callback executed by JobQueue to process DB changes."""
+		async with self._processing_lock: # Ensure sequential processing
+			logger.info("JobQueue: Checking for new database entries...")
+			last_known_id = context.bot_data.get(LAST_KNOWN_DB_CASE_ID_KEY, 0)
+			
+			try:
+				new_cases = await asyncio.to_thread(get_new_cases_from_db, self.db_path, last_known_id)
+			except Exception as e:
+				logger.error(f"Error in asyncio.to_thread(get_new_cases_from_db): {e}")
+				return
+
+			if not new_cases:
+				logger.info("JobQueue: No new cases found in the database.")
+				return
+
+			max_id_in_batch = last_known_id
+			for case_row in new_cases:
+				try:
+					# Ensure bot object is correctly passed or accessed
+					await process_and_send_db_case(self.application.bot, case_row, context)
+					if case_row['primkey_case'] > max_id_in_batch:
+						max_id_in_batch = case_row['primkey_case']
+				except Exception as e:
+					logger.error(f"Error processing DB case ID {case_row['primkey_case']}: {e}", exc_info=True)
+			
+			# Update the last known ID in bot_data
+			if max_id_in_batch > last_known_id:
+				context.bot_data[LAST_KNOWN_DB_CASE_ID_KEY] = max_id_in_batch
+				logger.info(f"JobQueue: Updated last known DB case ID to {max_id_in_batch}")
+
 # --- Main Execution ---
 
 if __name__ == "__main__":
@@ -1021,7 +1307,7 @@ if __name__ == "__main__":
 	parser.add_argument('--token', required=True, help='Telegram Bot Token')
 	parser.add_argument(
 		'--print',
-		dest='printer_name', # Changed dest to avoid conflict with builtin print
+		dest='printer_name', 
 		default=None,
 		help='Specify the network printer name for IrfanView printing (e.g., "MyPrinter" or "\\\\Server\\PrinterShare")'
 	)
@@ -1030,21 +1316,25 @@ if __name__ == "__main__":
 						choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
 						help='Set the logging level')
 	parser.add_argument('--debug', action='store_true', help='Enable debug mode (no channel messages, potentially different web app URLs)')
+	# New argument for database path
+	parser.add_argument('--db-file', help='Path to the SQLite database file to monitor.')
+
 	args = parser.parse_args()
 
+	# --- Logging Setup (remains the same) ---
 	if args.log_file:
-		# Ensure the log directory exists, using SCRIPT_DIR for relative paths
 		log_path = os.path.join(SCRIPT_DIR, args.log_file)
 		os.makedirs(os.path.dirname(log_path), exist_ok=True)
 	else:
-		log_path = None # Log to console
+		log_path = None 
 
 	logging.basicConfig(
-		filename=log_path, # None here means console
+		filename=log_path, 
 		format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 		level=getattr(logging, args.log_level.upper())
 	)
-	logging.getLogger("httpx").setLevel(logging.WARNING) # Quieten httpx library
+	logging.getLogger("httpx").setLevel(logging.WARNING) 
+	logging.getLogger("watchdog").setLevel(logging.INFO) # Adjust watchdog's own logger if too verbose
 
 	logger.info("Starting bot...")
 
@@ -1059,18 +1349,52 @@ if __name__ == "__main__":
 	else:
 		logger.info("Debug mode DISABLED.")
 
-
-	if args.printer_name: # Use the new dest name
+	if args.printer_name:
 		logger.info(f"Printer name specified: '{args.printer_name}'. Printing will be enabled.")
 		application.bot_data['printer_name'] = args.printer_name
 	else:
 		logger.info("No printer name specified. Printing via IrfanView is disabled.")
 		application.bot_data['printer_name'] = None
 
+	# --- Database Monitoring Setup ---
+	observer = None
+	if args.db_file:
+		DB_FILE_PATH = os.path.abspath(args.db_file) # Store absolute path
+		if os.path.exists(DB_FILE_PATH):
+			logger.info(f"Database monitoring ENABLED for: {DB_FILE_PATH}")
+			# Initialize last known ID
+			initial_max_id = get_initial_max_case_id(DB_FILE_PATH)
+			application.bot_data[LAST_KNOWN_DB_CASE_ID_KEY] = initial_max_id
+			logger.info(f"Set initial last known DB case ID to: {initial_max_id}")
+
+			event_handler = DatabaseChangeHandler(application, DB_FILE_PATH)
+			observer = Observer()
+			# Watch the directory containing the DB file, as some DB operations might involve temp files
+			observer.schedule(event_handler, os.path.dirname(DB_FILE_PATH), recursive=False)
+			observer.start()
+			logger.info(f"Watchdog observer started for directory: {os.path.dirname(DB_FILE_PATH)}")
+		else:
+			logger.error(f"Database file not found at: {DB_FILE_PATH}. Monitoring disabled.")
+			DB_FILE_PATH = None # Ensure it's None if path is invalid
+	else:
+		logger.info("No database file specified. Database monitoring DISABLED.")
+
+	# --- Handlers (remain the same) ---
 	application.add_handler(CommandHandler("start", start_command))
 	application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
 	application.add_handler(CallbackQueryHandler(handle_ticket_print_callback, pattern="^print:parse_encoded$"))
 	application.add_handler(CallbackQueryHandler(handle_calculator_print_callback, pattern="^print:parse_calculator_encoded$"))
 
 	logger.info("Bot started and polling for updates...")
-	application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+	try:
+		application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+	except KeyboardInterrupt:
+		logger.info("Bot stopped by user (KeyboardInterrupt).")
+	except Exception as e:
+		logger.error(f"Critical error during bot execution: {e}", exc_info=True)
+	finally:
+		if observer:
+			observer.stop()
+			observer.join()
+			logger.info("Watchdog observer stopped.")
+		logger.info("Bot shutdown complete.")

@@ -1260,7 +1260,7 @@ class DatabaseChangeHandler(FileSystemEventHandler):
 
 
 	def on_modified(self, event):
-		if event.is_directory or event.src_path != os.path.realpath(self.db_path):
+		if event.is_directory or os.path.realpath(event.src_path) != os.path.realpath(self.db_path):
 			return
 
 		current_time = time.time()

@@ -1111,26 +1111,27 @@ async def process_and_send_db_case(
 	context: ContextTypes.DEFAULT_TYPE
 ) -> None:
 	"""
-	Processes a single case from the database and sends it as a ticket message.
+	Processes a single case from the database and sends it as a ticket message,
+	formatted similarly to web app tickets using a concatenated f-string style.
 	"""
 	logger.info(f"Processing database case ID: {case_data['primkey_case']}")
 
-	# --- User Identifier (remains the same as previous update) ---
+	# --- User Identifier ---
 	submitter_id = case_data['fellow']
 	fellow_nickname = case_data['fellow_nickname']
 	fellow_name = case_data['fellow_name']
-	user_identifier = "DB Sync"
+	user_identifier = "DB Sync" # Default if no fellow info
 	if fellow_nickname:
 		user_identifier = fellow_nickname
 	elif fellow_name:
 		user_identifier = fellow_name
-	elif submitter_id:
+	elif submitter_id: # Fallback to fellow ID if name/nickname missing
 		user_identifier = f"Сотрудник ID: {submitter_id}"
 
-	# --- Time (remains the same) ---
+	# --- Time ---
 	formatted_time = format_unix_timestamp(case_data['date_input'])
 
-	# --- Phone Number (remains the same) ---
+	# --- Phone Number ---
 	raw_phone_db = case_data['phone'] if case_data['phone'] else case_data['dp_phone']
 	raw_phone_str = str(raw_phone_db) if raw_phone_db is not None else 'N/A'
 	formatted_phone_display = format_phone_number_display(raw_phone_str)
@@ -1142,62 +1143,52 @@ async def process_and_send_db_case(
 		elif (raw_phone_str.startswith('8') or raw_phone_str.startswith('7')) and len(raw_phone_str) == 11:
 			if raw_phone_str.startswith('8'):
 				tel_url_number = '+7' + raw_phone_str[1:]
-			elif raw_phone_str.startswith('7'):
+			elif raw_phone_str.startswith('7'): # Handle if phone is like 7978...
 				tel_url_number = '+' + raw_phone_str
 		if tel_url_number:
 			tel_url = f"tel:{tel_url_number}"
 			phone_link_html = f'<a href="{tel_url}"><b><code>{formatted_phone_display}</code></b></a>'
 
-	# --- New Description Logic ---
-	# Map DB fields to the conceptual fields from the HTML form
-
-	# 1. Conceptual "deviceModel" from DB fields
+	# --- Description Logic (constructs 'description_from_db_fields' variable) ---
 	db_device_model_parts = []
 	if case_data['type']: db_device_model_parts.append(case_data['type'])
 	if case_data['manufacturer']: db_device_model_parts.append(case_data['manufacturer'])
 	if case_data['model']: db_device_model_parts.append(case_data['model'])
 	if case_data['serial']: db_device_model_parts.append(f"(S/N: {case_data['serial']})")
-	# Fallback if all parts for device model are empty
 	html_form_deviceModel_db = " ".join(filter(None, db_device_model_parts)).strip()
 	if not html_form_deviceModel_db:
 		html_form_deviceModel_db = "Модель техники не указана"
 
-	# 2. Conceptual "issueDescription" from DB fields
 	db_issue_desc_parts = []
 	if case_data['reason']: db_issue_desc_parts.append(case_data['reason'])
-	# Fallback if all parts for issue description are empty
 	html_form_issueDescription_db = ". ".join(filter(None, db_issue_desc_parts)).strip()
 	if not html_form_issueDescription_db:
 		html_form_issueDescription_db = "Характер неисправности не указан"
 
-	# 3. Conceptual "accessories" from DB field
 	html_form_accessories_db = (case_data['equipment'] or "").strip()
 
-	# Construct the description string following the HTML logic
-	description = f"{html_form_deviceModel_db}. {html_form_issueDescription_db}"
+	description_from_db_fields = f"{html_form_deviceModel_db}. {html_form_issueDescription_db}"
 	if html_form_accessories_db:
-		description += f". {html_form_accessories_db}"
+		description_from_db_fields += f". {html_form_accessories_db}"
 
-	# Clean up potential multiple periods or space-period issues
-	description = re.sub(r'\s*\.\s*', '. ', description) # Standardize period followed by space
-	description = re.sub(r'\.{2,}', '.', description)    # Replace multiple periods with a single one
-	description = description.strip().rstrip('.')        # Strip whitespace and remove trailing period for consistency
-	if description:                                      # Add a final period if there's content
-		description += "."
-
-	if not description or description == ".": # Fallback if description is still empty or just a period
-		description = "Детальное описание по заявке из БД отсутствует."
-	# --- End of New Description Logic ---
+	description_from_db_fields = re.sub(r'\s*\.\s*', '. ', description_from_db_fields)
+	description_from_db_fields = re.sub(r'\.{2,}', '.', description_from_db_fields)
+	description_from_db_fields = description_from_db_fields.strip().rstrip('.')
+	if description_from_db_fields:
+		description_from_db_fields += "."
+	if not description_from_db_fields or description_from_db_fields == ".":
+		description_from_db_fields = "Детальное описание по заявке из БД отсутствует."
+	# --- End of Description Logic ---
 
 	# --- Prepare data for encoding (for potential "Print" button) ---
 	ticket_details_to_encode = {
 		'p': raw_phone_str,
-		'd': description, # Use the newly formatted description
+		'd': description_from_db_fields,
 		's': user_identifier,
 		't': formatted_time,
 	}
 
-	base64_encoded_json = ""
+	base64_encoded_json = "" # Will be empty if encoding fails
 	try:
 		json_string = json.dumps(ticket_details_to_encode, separators=(',', ':'), ensure_ascii=False)
 		base64_encoded_json = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
@@ -1207,19 +1198,39 @@ async def process_and_send_db_case(
 	print_button = InlineKeyboardButton("🖨️ Print", callback_data="print:parse_encoded")
 	keyboard = InlineKeyboardMarkup([[print_button]])
 
-	message_text = (
-		f"✅ Заявка из БД (№{case_data['case_number'] or case_data['primkey_case']}) создана!\n\n"
-		f"👤 Принял(а) по БД: {user_identifier}\n"
-		f"🕒 Время по БД: {formatted_time}\n"
-		f"👤 Клиент по БД: {case_data['client'] or 'N/A'}\n"
+	# --- Assemble the message text in the desired style ---
+	case_id_display = case_data['case_number'] or case_data['primkey_case']
+	client_name_db = case_data['client'] or 'N/A'
+
+	# Prepare conditional string parts first
+	client_info_str_part = ""
+	if client_name_db != 'N/A':
+		client_info_str_part = f"👤 Клиент: {client_name_db}\n\n"
+	else:
+		# If no client, ensure a newline for consistent spacing before encoded data
+		client_info_str_part = "\n"
+
+	encoded_data_str_part = ""
+	if base64_encoded_json: # True if base64_encoded_json is not an empty string
+		encoded_data_str_part = f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
+
+	# Construct the message using a list with one main concatenated f-string,
+	# similar to the process_ticket_app_data example.
+	# This list will contain a single string element due to Python's adjacent string literal concatenation.
+	db_message_constructor_list = [
+		f"✅ Заявка создана! (Детали из БД, № {case_id_display})\n\n"
+		f"👤 Отправил(а): {user_identifier}\n"
+		f"🕒 Время: {formatted_time}\n"
 		f"--- Детали заявки ---\n"
 		f"📞 Телефон: {phone_link_html}\n"
-		f"📝 Описание:\n{description}\n\n" # Display the new description here
-	)
-	if base64_encoded_json:
-		message_text += f"{TICKETS_DATA_MARKER} {base64_encoded_json}\n\n"
+		f"📝 Описание: {description_from_db_fields}\n"  # Description ends with one newline
+		f"{client_info_str_part}"  # Appends client info (with its own newlines) or just a newline
+		f"{encoded_data_str_part}" # Appends encoded data (with its newlines) or nothing
+	]
 
-	# --- Sending logic (remains the same) ---
+	message_text = "".join(db_message_constructor_list) # Effectively gets the single concatenated string
+
+	# --- Sending logic ---
 	debug_mode = context.bot_data.get('debug_mode', False)
 	if not debug_mode and TARGET_CHANNEL_ID:
 		try:

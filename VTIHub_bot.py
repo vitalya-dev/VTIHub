@@ -69,8 +69,8 @@ logger = logging.getLogger(__name__)
 # --- Database Monitoring Configuration ---
 DB_FILE_PATH = None # To be set by command-line argument
 LAST_KNOWN_DB_CASE_ID_KEY = "last_known_db_case_id"
+DB_ID_STORAGE_FILENAME_TEMPLATE = "last_processed_id_{db_name}.txt" # Template for the ID storage file
 # How often to check the database after a modification event is detected (in seconds)
-# This helps to wait for writes to complete and avoid processing partial data.
 DB_PROCESSING_DELAY = 2
 
 # --- Bot Setup Functions ---
@@ -1105,6 +1105,41 @@ def format_unix_timestamp(ts: Optional[int]) -> str:
 	except Exception:
 		return str(ts) # Fallback
 
+
+# --- Add these helper functions ---
+def load_last_known_id_from_file(file_path: str) -> Optional[int]:
+	"""Loads the last known processed database case ID from a file."""
+	try:
+		if os.path.exists(file_path):
+			with open(file_path, 'r') as f:
+				content = f.read().strip()
+				if content.isdigit():
+					logger.info(f"Successfully read last known ID {content} from {file_path}")
+					return int(content)
+				else:
+					logger.warning(f"Invalid content in {file_path}: '{content}'. Expected an integer.")
+					return None
+		else:
+			logger.info(f"Last known ID file {file_path} not found.")
+			return None
+	except Exception as e:
+		logger.error(f"Error loading last known ID from {file_path}: {e}", exc_info=True)
+		return None
+
+def save_last_known_id_to_file(file_path: str, last_id: int) -> None:
+	"""Saves the last known processed database case ID to a file."""
+	try:
+		os.makedirs(os.path.dirname(file_path), exist_ok=True) # Ensure directory exists
+		with open(file_path, 'w') as f:
+			f.write(str(last_id))
+		logger.info(f"Successfully saved last known DB case ID {last_id} to {file_path}")
+	except Exception as e:
+		logger.error(f"Error saving last known ID {last_id} to {file_path}: {e}", exc_info=True)
+
+
+
+
+
 async def process_and_send_db_case(
 	bot: telegram.Bot,
 	case_data: sqlite3.Row,
@@ -1251,20 +1286,19 @@ async def process_and_send_db_case(
 
 
 class DatabaseChangeHandler(FileSystemEventHandler):
-	def __init__(self, application: Application, db_path: str):
+	def __init__(self, application: Application, db_path: str, db_id_storage_file_path: str): # MODIFIED
 		super().__init__()
 		self.application = application
 		self.db_path = db_path
-		self._last_processed_event_time = 0 # To avoid rapid duplicate processing
-		self._processing_lock = asyncio.Lock() # Ensure only one processing occurs at a time
-
+		self.db_id_storage_file_path = db_id_storage_file_path # ADDED: Store path to ID file
+		self._last_processed_event_time = 0
+		self._processing_lock = asyncio.Lock()
 
 	def on_modified(self, event):
 		if event.is_directory or os.path.realpath(event.src_path) != os.path.realpath(self.db_path):
 			return
 
 		current_time = time.time()
-		# Simple debounce: if a modification happened very recently, skip.
 		if current_time - self._last_processed_event_time < DB_PROCESSING_DELAY:
 			logger.debug(f"DB modification event for {event.src_path} too soon, skipping.")
 			return
@@ -1272,17 +1306,17 @@ class DatabaseChangeHandler(FileSystemEventHandler):
 		
 		logger.info(f"Database file {event.src_path} has been modified. Scheduling check.")
 		
-		# Schedule the processing using job_queue to run in PTB's async context
 		self.application.job_queue.run_once(
 			self.process_db_changes_callback,
-			when=DB_PROCESSING_DELAY, # Delay slightly to ensure file write is complete
+			when=DB_PROCESSING_DELAY,
 			name=f"db_check_{current_time}"
 		)
 
 	async def process_db_changes_callback(self, context: ContextTypes.DEFAULT_TYPE) -> None:
 		"""Callback executed by JobQueue to process DB changes."""
-		async with self._processing_lock: # Ensure sequential processing
+		async with self._processing_lock:
 			logger.info("JobQueue: Checking for new database entries...")
+			# This ID comes from bot_data, which was initialized from file or DB at startup
 			last_known_id = context.bot_data.get(LAST_KNOWN_DB_CASE_ID_KEY, 0)
 			
 			try:
@@ -1296,19 +1330,27 @@ class DatabaseChangeHandler(FileSystemEventHandler):
 				return
 
 			max_id_in_batch = last_known_id
+			successfully_processed_any_case = False # To track if any case in the batch was sent
 			for case_row in new_cases:
 				try:
-					# Ensure bot object is correctly passed or accessed
 					await process_and_send_db_case(self.application.bot, case_row, context)
 					if case_row['primkey_case'] > max_id_in_batch:
 						max_id_in_batch = case_row['primkey_case']
+					successfully_processed_any_case = True # Mark success
 				except Exception as e:
 					logger.error(f"Error processing DB case ID {case_row['primkey_case']}: {e}", exc_info=True)
 			
-			# Update the last known ID in bot_data
-			if max_id_in_batch > last_known_id:
+			# Update the last known ID in bot_data and save to file
+			# Only update if new cases were processed successfully
+			if successfully_processed_any_case and max_id_in_batch > last_known_id:
 				context.bot_data[LAST_KNOWN_DB_CASE_ID_KEY] = max_id_in_batch
-				logger.info(f"JobQueue: Updated last known DB case ID to {max_id_in_batch}")
+				logger.info(f"JobQueue: Updated last known DB case ID in bot_data to {max_id_in_batch}")
+				# Save to the persistent file
+				save_last_known_id_to_file(self.db_id_storage_file_path, max_id_in_batch)
+			elif not successfully_processed_any_case and new_cases:
+				logger.warning("JobQueue: New cases were fetched, but none were successfully processed. Last known ID file not updated.")
+			elif max_id_in_batch <= last_known_id and new_cases: # Should not happen if get_new_cases_from_db works correctly
+				logger.info("JobQueue: Processed cases but max_id_in_batch did not advance. ID file not updated.")
 
 # --- Main Execution ---
 
@@ -1366,28 +1408,63 @@ if __name__ == "__main__":
 		logger.info("No printer name specified. Printing via IrfanView is disabled.")
 		application.bot_data['printer_name'] = None
 
-	# --- Database Monitoring Setup ---
+  	# --- Database Monitoring Setup ---
 	observer = None
+	db_id_storage_file_path = None 
+	event_handler = None # Initialize event_handler
+
 	if args.db_file:
-		DB_FILE_PATH = os.path.realpath(args.db_file) # Store absolute path
+		DB_FILE_PATH = os.path.realpath(args.db_file)
+		db_name_for_file = os.path.splitext(os.path.basename(DB_FILE_PATH))[0]
+		id_storage_filename = DB_ID_STORAGE_FILENAME_TEMPLATE.format(db_name=db_name_for_file)
+		db_id_storage_file_path = os.path.join(SCRIPT_DIR, "bot_data", id_storage_filename)
+
 		if os.path.exists(DB_FILE_PATH):
 			logger.info(f"Database monitoring ENABLED for: {DB_FILE_PATH}")
-			# Initialize last known ID
-			initial_max_id = get_initial_max_case_id(DB_FILE_PATH)
-			application.bot_data[LAST_KNOWN_DB_CASE_ID_KEY] = initial_max_id
-			logger.info(f"Set initial last known DB case ID to: {initial_max_id}")
+			logger.info(f"Last processed ID will be managed in: {db_id_storage_file_path}")
+			
+			os.makedirs(os.path.dirname(db_id_storage_file_path), exist_ok=True)
 
-			event_handler = DatabaseChangeHandler(application, DB_FILE_PATH)
+			current_last_known_id = load_last_known_id_from_file(db_id_storage_file_path)
+
+			if current_last_known_id is None:
+				logger.info(f"No valid last known ID found in {db_id_storage_file_path} or file doesn't exist. Fetching from DB as a fallback.")
+				current_last_known_id = get_initial_max_case_id(DB_FILE_PATH)
+				logger.info(f"Initial max primkey_case from DB: {current_last_known_id}. Saving this to file.")
+				save_last_known_id_to_file(db_id_storage_file_path, current_last_known_id)
+			else:
+				logger.info(f"Loaded last known DB case ID from file: {current_last_known_id}")
+
+			application.bot_data[LAST_KNOWN_DB_CASE_ID_KEY] = current_last_known_id
+			logger.info(f"Set initial last known DB case ID for this session to: {current_last_known_id}")
+
+			# Create the event handler instance
+			event_handler = DatabaseChangeHandler(application, DB_FILE_PATH, db_id_storage_file_path)
 			observer = Observer()
-			# Watch the directory containing the DB file, as some DB operations might involve temp files
+			# Watch the directory containing the DB file
 			observer.schedule(event_handler, os.path.dirname(DB_FILE_PATH), recursive=False)
+			
+			# --- MODIFICATION FOR IMMEDIATE SYNC ---
+			# Schedule an immediate check using the handler's processing method
+			application.job_queue.run_once(
+				event_handler.process_db_changes_callback, 
+				when=0,  # Run immediately
+				name="initial_db_sync",
+				job_kwargs={'misfire_grace_time': 30}
+			)
+			logger.info("Scheduled an immediate database synchronization check.")
+			# --- END OF MODIFICATION ---
+
 			observer.start()
 			logger.info(f"Watchdog observer started for directory: {os.path.dirname(DB_FILE_PATH)}")
 		else:
 			logger.error(f"Database file not found at: {DB_FILE_PATH}. Monitoring disabled.")
-			DB_FILE_PATH = None # Ensure it's None if path is invalid
+			DB_FILE_PATH = None 
+			db_id_storage_file_path = None
 	else:
 		logger.info("No database file specified. Database monitoring DISABLED.")
+
+
 
 	# --- Handlers (remain the same) ---
 	application.add_handler(CommandHandler("start", start_command))

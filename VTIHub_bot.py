@@ -7,6 +7,7 @@ import re
 import io
 import os
 import subprocess
+import hashlib
 
 from typing import Optional, Dict, Any, Tuple
 
@@ -70,6 +71,7 @@ logger = logging.getLogger(__name__)
 DB_FILE_PATH = None # To be set by command-line argument
 LAST_KNOWN_DB_CASE_ID_KEY = "last_known_db_case_id"
 DB_ID_STORAGE_FILENAME_TEMPLATE = "last_processed_id_{db_name}.txt" # Template for the ID storage file
+ID_STORAGE_SECRET_KEY = "your_very_secret_and_unique_key_here"
 # How often to check the database after a modification event is detected (in seconds)
 DB_PROCESSING_DELAY = 2
 
@@ -1108,33 +1110,72 @@ def format_unix_timestamp(ts: Optional[int]) -> str:
 
 # --- Add these helper functions ---
 def load_last_known_id_from_file(file_path: str) -> Optional[int]:
-	"""Loads the last known processed database case ID from a file."""
-	try:
-		if os.path.exists(file_path):
-			with open(file_path, 'r') as f:
-				content = f.read().strip()
-				if content.isdigit():
-					logger.info(f"Successfully read last known ID {content} from {file_path}")
-					return int(content)
-				else:
-					logger.warning(f"Invalid content in {file_path}: '{content}'. Expected an integer.")
-					return None
-		else:
-			logger.info(f"Last known ID file {file_path} not found.")
-			return None
-	except Exception as e:
-		logger.error(f"Error loading last known ID from {file_path}: {e}", exc_info=True)
-		return None
+    """Loads the last known processed database case ID from a file and verifies its hash."""
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                data_from_file = json.load(f)
+                
+            stored_id = data_from_file.get("last_id")
+            stored_hash = data_from_file.get("hash")
+
+            if stored_id is None or stored_hash is None:
+                logger.warning(f"Invalid data format in {file_path}. Missing 'last_id' or 'hash'.")
+                return None
+
+            if not isinstance(stored_id, int):
+                logger.warning(f"Invalid 'last_id' type in {file_path}. Expected an integer.")
+                return None
+
+            # Re-calculate hash for verification
+            id_str = str(stored_id)
+            data_to_verify = f"{id_str}{ID_STORAGE_SECRET_KEY}"
+            expected_hash = hashlib.sha256(data_to_verify.encode('utf-8')).hexdigest()
+
+            if expected_hash == stored_hash:
+                logger.info(f"Successfully read and verified last known ID {stored_id} from {file_path}")
+                return stored_id
+            else:
+                logger.critical(
+                    f"TAMPERING DETECTED or CORRUPTED ID FILE: {file_path}. "
+                    f"Stored hash does not match calculated hash for ID {stored_id}."
+                )
+                return None # Signal that the ID is not trustworthy
+        else:
+            logger.info(f"Last known ID file {file_path} not found.")
+            return None
+    except json.JSONDecodeError:
+        logger.error(f"Error decoding JSON from {file_path}. File might be corrupted.", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Error loading last known ID from {file_path}: {e}", exc_info=True)
+        return None
 
 def save_last_known_id_to_file(file_path: str, last_id: int) -> None:
-	"""Saves the last known processed database case ID to a file."""
-	try:
-		os.makedirs(os.path.dirname(file_path), exist_ok=True) # Ensure directory exists
-		with open(file_path, 'w') as f:
-			f.write(str(last_id))
-		logger.info(f"Successfully saved last known DB case ID {last_id} to {file_path}")
-	except Exception as e:
-		logger.error(f"Error saving last known ID {last_id} to {file_path}: {e}", exc_info=True)
+    """Saves the last known processed database case ID and its hash to a file."""
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True) # Ensure directory exists
+        
+        id_str = str(last_id)
+        # Prepare data for hashing: combine ID with the secret key
+        data_to_hash = f"{id_str}{ID_STORAGE_SECRET_KEY}"
+        
+        # Calculate SHA256 hash
+        current_hash = hashlib.sha256(data_to_hash.encode('utf-8')).hexdigest()
+        
+        # Data to store in JSON format
+        data_to_store = {
+            "last_id": last_id,
+            "hash": current_hash
+        }
+        
+        with open(file_path, 'w') as f:
+            json.dump(data_to_store, f)
+            
+        logger.info(f"Successfully saved last known DB case ID {last_id} and hash to {file_path}")
+    except Exception as e:
+        logger.error(f"Error saving last known ID {last_id} and hash to {file_path}: {e}", exc_info=True)
+
 
 
 

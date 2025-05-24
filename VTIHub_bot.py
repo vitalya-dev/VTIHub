@@ -476,9 +476,9 @@ IRFANVIEW_ABS_PATH = os.path.join(SCRIPT_DIR, IRFANVIEW_EXECUTABLE_NAME)
 
 # Font Sizes
 FONT_SIZE_HEADER = 28
-FONT_SIZE_BODY = 18
+FONT_SIZE_BODY = 22
 FONT_SIZE_TICKET_DETAILS = 24
-FONT_SIZE_SMALL = 16
+FONT_SIZE_SMALL = 14
 
 
 # Layout & Styling
@@ -685,107 +685,123 @@ def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Imag
 	margin_px = mm2px(MARGIN_MM)
 	current_y = margin_px
 
-	# --- Header Section (Copied and adapted from _generate_ticket_label_image) ---
+
 	try:
 		logo = Image.open(LOGO_PATH).convert("RGBA")
 		logo_size_px = mm2px(LOGO_SIZE_MM)
-		# Calculate position to center logo horizontally if desired, or keep left aligned
-		# For simplicity, keeping it left-aligned similar to ticket
-		img.paste(logo, (margin_px, margin_px), logo) # Pasting logo at top-left margin
-		header_text_x = margin_px + logo_size_px + mm2px(1) # Text starts after logo
-		header_y = margin_px # Start header text at the top margin
-
-		# Draw header text lines
-		header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
-		header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y)
-		header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y)
-		header_y = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y)
-
-		# Calculate banner position based on the taller of logo or text block
-		banner_height = max(margin_px + logo_size_px, header_y) + mm2px(1)
-		draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
-		current_y = banner_height + mm2px(2) # Update current_y to be below the header banner
-	except FileNotFoundError:
-		logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo for calculator label.")
-		# Fallback if logo is not found - draw text starting from margin
-		header_text_x = margin_px
+		img.paste(logo, (margin_px, margin_px), logo)
+		header_text_x = margin_px + logo_size_px + mm2px(1)
 		header_y = margin_px
 		header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
 		header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y)
 		header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y)
-		
-		banner_height = header_y + mm2px(1) # Calculate banner position without logo
+		header_y = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y)
+		banner_height = max(margin_px + logo_size_px, header_y) + mm2px(1)
+		draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
+		current_y = banner_height + mm2px(2)
+	except FileNotFoundError:
+		logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo for calculator label.")
+		header_text_x = margin_px
+		header_y = margin_px
+		header_y = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y)
+		header_y = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y) # Added missing lines
+		header_y = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y) # Added missing lines
+		banner_height = header_y + mm2px(1)
 		draw.line((0, banner_height, LABEL_WIDTH_PX, banner_height), fill=BORDER_COLOR, width=BORDER_WIDTH)
 		current_y = banner_height + mm2px(2)
 	except Exception as e:
 		logger.error(f"Error drawing header for calculator label: {e}")
-		# If header fails, we might want to return None or continue without a header
-		# For now, let's assume we start drawing items from the top margin if header fails catastrophically
-		current_y = margin_px
-
+		current_y = margin_px # Fallback
 
 	# --- Calculator Details Section ---
 	body_x = margin_px
-	# current_y is already set after the header
-
 	items_list = calc_data.get('items', [])
 	total_amount = calc_data.get('total', 0.0)
 
-	# --- Items List ---
+	item_font = fonts["body"]
+	item_font_small = fonts["small"]
+	# For consistency, all line heights will now use the full LINE_SPACING
+	# as _draw_text_line does.
+	item_ascent, item_descent = item_font.getmetrics()
+	item_one_line_pitch = item_ascent + item_descent + LINE_SPACING # Full height for one item line
+
+	small_ascent, small_descent = item_font_small.getmetrics()
+	trunc_msg_line_pitch = small_ascent + small_descent + LINE_SPACING # Full height for truncation line
+
+	# --- Calculate required footer height ---
+	# The footer consists of:
+	# 1. Space before separator
+	# 2. Separator line (drawn using _draw_text_line with item_font for consistent dashes)
+	# 3. Space after separator
+	# 4. Total amount text line (drawn using _draw_text_line with item_font)
+
+	footer_space_before_separator_px = mm2px(0)
+	footer_space_after_separator_px = mm2px(0)
+
+	# Height of the separator line if drawn with _draw_text_line
+	# Using item_font for separator to match its likely visual weight, or fonts["small"]
+	sep_font_ascent, sep_font_descent = item_font.getmetrics() # Or choose a specific font for separator
+	separator_line_pitch = sep_font_ascent + sep_font_descent + LINE_SPACING
+
+	# Height of the total amount text line
+	total_text_line_pitch = item_one_line_pitch # Assuming total uses same font as items
+
+	required_footer_height = (
+		footer_space_before_separator_px +
+		separator_line_pitch +
+		footer_space_after_separator_px +
+		total_text_line_pitch
+	)
+
+	# This is the Y-coordinate that the top of any item/truncation line must not exceed
+	# to ensure the entire footer can fit after it.
+	max_y_for_item_content = LABEL_HEIGHT_PX - margin_px - required_footer_height
+	
 	price_area_width_px = mm2px(15) # Reserve space for price on the right
-
-	# Use "body" font for items
-	item_font = fonts["body"] # CHANGED FONT HERE
-	item_font_small = fonts["small"] # For truncation message
-
-
-	# Estimate height needed for total and separator
-	total_label_text = "Итого:" # Text for measuring
-	total_line_height_estimate = item_font.getmetrics()[0] + item_font.getmetrics()[1] + LINE_SPACING + mm2px(2) # Height of total line
-	separator_height = mm2px(1) + LINE_SPACING # Height of separator line + spacing
-	# Check if there's enough space for the current item and the total line
-	# This needs to be more dynamic based on actual text height
-	ascent, descent = item_font.getmetrics()
-	item_line_height = ascent + descent + LINE_SPACING // 2
+	truncated = False
 
 	for i, item_data in enumerate(items_list):
-		if current_y + item_line_height + separator_height + total_line_height_estimate > LABEL_HEIGHT_PX - margin_px:
-			# Not enough space for this item AND the total section
-			# Draw truncation message if not all items are displayed
-			if i < len(items_list):
-				trunc_msg = f"...и еще {len(items_list) - i} товар(ов)"
-				# Check if truncation message fits
-				if current_y + item_font_small.getmetrics()[0] + item_font_small.getmetrics()[1] < LABEL_HEIGHT_PX - margin_px - total_line_height_estimate - separator_height:
-					_draw_text_line(draw, trunc_msg, item_font_small, body_x, current_y)
-					current_y += item_font_small.getmetrics()[0] + item_font_small.getmetrics()[1] + LINE_SPACING // 2
-			break # Stop adding items
+		# Determine if truncation is needed before drawing the item
+		
+		# Condition 1: MAX_ITEMS_ON_LABEL reached
+		if i >= MAX_ITEMS_ON_LABEL:
+			if not truncated: # Try to print truncation message only once
+				num_actually_truncated = len(items_list) - i # Items from current 'i' onwards
+				if num_actually_truncated > 0:
+					trunc_msg = f"...и еще {num_actually_truncated} товар(ов)"
+					# Check if truncation message itself fits before the reserved footer space
+					if current_y + trunc_msg_line_pitch <= max_y_for_item_content + 1: # +1 for safety margin
+						current_y = _draw_text_line(draw, trunc_msg, item_font_small, body_x, current_y)
+					# else: truncation message doesn't fit here
+				truncated = True
+			break # Stop processing items
 
-		if i >= MAX_ITEMS_ON_LABEL : # Fallback hard limit
-			# This check might be redundant if the height check above is effective
-			available_height_for_trunc_msg = LABEL_HEIGHT_PX - current_y - margin_px - total_line_height_estimate - separator_height
-			if item_font_small.getbbox("...и еще")[3] < available_height_for_trunc_msg:
-				_draw_text_line(draw, f"...и еще {len(items_list) - MAX_ITEMS_ON_LABEL} товар(ов)", item_font_small, body_x, current_y)
-				current_y += item_font_small.getmetrics()[0] + item_font_small.getmetrics()[1] + LINE_SPACING // 2
-			break
+		# Condition 2: Not enough vertical space for the current item AND the guaranteed footer
+		# current_y is where this item would start. item_one_line_pitch is its height.
+		if current_y + item_one_line_pitch > max_y_for_item_content + 1: # +1 for safety margin
+			if not truncated: # Try to print truncation message only once
+				num_actually_truncated = len(items_list) - i
+				if num_actually_truncated > 0:
+					trunc_msg = f"...и еще {num_actually_truncated} товар(ов)"
+					# Check if truncation message itself fits
+					if current_y + trunc_msg_line_pitch <= max_y_for_item_content + 1: # +1 for safety
+						current_y = _draw_text_line(draw, trunc_msg, item_font_small, body_x, current_y)
+					# else: truncation message doesn't fit
+				truncated = True
+			break # Stop processing items
 
-
+		# If we are here, the item fits and MAX_ITEMS_ON_LABEL not reached yet
 		item_name = item_data.get('name', 'N/A')
 		item_price = item_data.get('price', 0.0)
 		
 		max_name_width = LABEL_WIDTH_PX - (2 * margin_px) - price_area_width_px - mm2px(2)
-		
-		# Truncate item name if it's too long
-		# This truncation logic might need refinement with the new font
 		display_name = item_name
-		# Check actual width of the text
 		if item_font.getlength(display_name) > max_name_width:
-			# Simple character based truncation, might need to be smarter
-			avg_char_width_approx = item_font.getlength("X") # Approximate
+			avg_char_width_approx = item_font.getlength("X") 
 			if avg_char_width_approx > 0:
 				max_chars = int(max_name_width / avg_char_width_approx)
 				if len(display_name) > max_chars :
 					display_name = display_name[:max_chars - 3] + "..." if max_chars > 3 else display_name[:max_chars]
-
 
 		# Draw item name (left aligned)
 		draw.text((body_x, current_y), display_name, font=item_font, fill=TEXT_COLOR)
@@ -796,25 +812,36 @@ def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Imag
 		price_x = LABEL_WIDTH_PX - margin_px - price_text_length
 		draw.text((price_x, current_y), price_text, font=item_font, fill=TEXT_COLOR)
 
-		current_y += item_line_height
-		
-		# This inner break condition might be too aggressive or needs re-evaluation with new font.
-
+		current_y += item_one_line_pitch # Advance current_y by the full pitch of the item line
 
 	# --- Total Amount ---
-	# Ensure there's a little space before the separator line, if not already handled by item loop break
-	if current_y + separator_height + total_line_height_estimate < LABEL_HEIGHT_PX - margin_px:
-		current_y += mm2px(1) # Small space before total separator
-		_draw_text_line(draw, "----------------------------------", fonts["body"], body_x, current_y, color=BORDER_COLOR) # Separator line
-		current_y += mm2px(1) # Space after separator, before total text. Adjust LINE_SPACING in _draw_text_line if this is too much
+	# Draw the footer if the current_y (after all items or truncation message)
+	# allows the entire footer block to fit.
+	# current_y is now the y-coordinate for the *start* of the footer block.
+	if not truncated: # If no truncation happened, ensure current_y is still valid
+		if current_y > max_y_for_item_content + 1: # +1 for safety
+			logger.warning(f"Items finished, but current_y ({current_y}) is already past max_y_for_item_content ({max_y_for_item_content}). Footer might be skipped or overlap.")
+
+
+	if current_y + required_footer_height <= LABEL_HEIGHT_PX - margin_px + 1: # +1 for minor float inaccuracies
+		current_y += footer_space_before_separator_px
+		
+		# Use a suitable font for the separator, e.g., item_font or fonts["small"]
+		current_y = _draw_text_line(draw, "----------------------------------", item_font, body_x, current_y, color=BORDER_COLOR)
+		
+		current_y += footer_space_after_separator_px
 	
 		total_str = f"Итого: {total_amount:.2f}"
-		total_text_length = item_font.getlength(total_str) # Use item_font or a specific total_font
-		total_x = LABEL_WIDTH_PX - margin_px - total_text_length # Right align total
+		total_text_length = item_font.getlength(total_str)
+		total_x = LABEL_WIDTH_PX - margin_px - total_text_length 
 		
-		_draw_text_line(draw, total_str, item_font, int(total_x), current_y, color=TEXT_COLOR)
+		current_y = _draw_text_line(draw, total_str, item_font, int(total_x), current_y, color=TEXT_COLOR)
 	else:
-		logger.warning("Not enough space to draw the total amount on calculator label.")
+		logger.warning(
+			f"Not enough space to draw the total amount section. "
+			f"current_y ({current_y}) + required_footer_height ({required_footer_height}) "
+			f"> label_height_limit ({LABEL_HEIGHT_PX - margin_px})."
+		)
 
 	return img
 
@@ -1110,71 +1137,71 @@ def format_unix_timestamp(ts: Optional[int]) -> str:
 
 # --- Add these helper functions ---
 def load_last_known_id_from_file(file_path: str) -> Optional[int]:
-    """Loads the last known processed database case ID from a file and verifies its hash."""
-    try:
-        if os.path.exists(file_path):
-            with open(file_path, 'r') as f:
-                data_from_file = json.load(f)
-                
-            stored_id = data_from_file.get("last_id")
-            stored_hash = data_from_file.get("hash")
+	"""Loads the last known processed database case ID from a file and verifies its hash."""
+	try:
+		if os.path.exists(file_path):
+			with open(file_path, 'r') as f:
+				data_from_file = json.load(f)
+				
+			stored_id = data_from_file.get("last_id")
+			stored_hash = data_from_file.get("hash")
 
-            if stored_id is None or stored_hash is None:
-                logger.warning(f"Invalid data format in {file_path}. Missing 'last_id' or 'hash'.")
-                return None
+			if stored_id is None or stored_hash is None:
+				logger.warning(f"Invalid data format in {file_path}. Missing 'last_id' or 'hash'.")
+				return None
 
-            if not isinstance(stored_id, int):
-                logger.warning(f"Invalid 'last_id' type in {file_path}. Expected an integer.")
-                return None
+			if not isinstance(stored_id, int):
+				logger.warning(f"Invalid 'last_id' type in {file_path}. Expected an integer.")
+				return None
 
-            # Re-calculate hash for verification
-            id_str = str(stored_id)
-            data_to_verify = f"{id_str}{ID_STORAGE_SECRET_KEY}"
-            expected_hash = hashlib.sha256(data_to_verify.encode('utf-8')).hexdigest()
+			# Re-calculate hash for verification
+			id_str = str(stored_id)
+			data_to_verify = f"{id_str}{ID_STORAGE_SECRET_KEY}"
+			expected_hash = hashlib.sha256(data_to_verify.encode('utf-8')).hexdigest()
 
-            if expected_hash == stored_hash:
-                logger.info(f"Successfully read and verified last known ID {stored_id} from {file_path}")
-                return stored_id
-            else:
-                logger.critical(
-                    f"TAMPERING DETECTED or CORRUPTED ID FILE: {file_path}. "
-                    f"Stored hash does not match calculated hash for ID {stored_id}."
-                )
-                return None # Signal that the ID is not trustworthy
-        else:
-            logger.info(f"Last known ID file {file_path} not found.")
-            return None
-    except json.JSONDecodeError:
-        logger.error(f"Error decoding JSON from {file_path}. File might be corrupted.", exc_info=True)
-        return None
-    except Exception as e:
-        logger.error(f"Error loading last known ID from {file_path}: {e}", exc_info=True)
-        return None
+			if expected_hash == stored_hash:
+				logger.info(f"Successfully read and verified last known ID {stored_id} from {file_path}")
+				return stored_id
+			else:
+				logger.critical(
+					f"TAMPERING DETECTED or CORRUPTED ID FILE: {file_path}. "
+					f"Stored hash does not match calculated hash for ID {stored_id}."
+				)
+				return None # Signal that the ID is not trustworthy
+		else:
+			logger.info(f"Last known ID file {file_path} not found.")
+			return None
+	except json.JSONDecodeError:
+		logger.error(f"Error decoding JSON from {file_path}. File might be corrupted.", exc_info=True)
+		return None
+	except Exception as e:
+		logger.error(f"Error loading last known ID from {file_path}: {e}", exc_info=True)
+		return None
 
 def save_last_known_id_to_file(file_path: str, last_id: int) -> None:
-    """Saves the last known processed database case ID and its hash to a file."""
-    try:
-        os.makedirs(os.path.dirname(file_path), exist_ok=True) # Ensure directory exists
-        
-        id_str = str(last_id)
-        # Prepare data for hashing: combine ID with the secret key
-        data_to_hash = f"{id_str}{ID_STORAGE_SECRET_KEY}"
-        
-        # Calculate SHA256 hash
-        current_hash = hashlib.sha256(data_to_hash.encode('utf-8')).hexdigest()
-        
-        # Data to store in JSON format
-        data_to_store = {
-            "last_id": last_id,
-            "hash": current_hash
-        }
-        
-        with open(file_path, 'w') as f:
-            json.dump(data_to_store, f)
-            
-        logger.info(f"Successfully saved last known DB case ID {last_id} and hash to {file_path}")
-    except Exception as e:
-        logger.error(f"Error saving last known ID {last_id} and hash to {file_path}: {e}", exc_info=True)
+	"""Saves the last known processed database case ID and its hash to a file."""
+	try:
+		os.makedirs(os.path.dirname(file_path), exist_ok=True) # Ensure directory exists
+		
+		id_str = str(last_id)
+		# Prepare data for hashing: combine ID with the secret key
+		data_to_hash = f"{id_str}{ID_STORAGE_SECRET_KEY}"
+		
+		# Calculate SHA256 hash
+		current_hash = hashlib.sha256(data_to_hash.encode('utf-8')).hexdigest()
+		
+		# Data to store in JSON format
+		data_to_store = {
+			"last_id": last_id,
+			"hash": current_hash
+		}
+		
+		with open(file_path, 'w') as f:
+			json.dump(data_to_store, f)
+			
+		logger.info(f"Successfully saved last known DB case ID {last_id} and hash to {file_path}")
+	except Exception as e:
+		logger.error(f"Error saving last known ID {last_id} and hash to {file_path}: {e}", exc_info=True)
 
 
 
@@ -1449,7 +1476,7 @@ if __name__ == "__main__":
 		logger.info("No printer name specified. Printing via IrfanView is disabled.")
 		application.bot_data['printer_name'] = None
 
-  	# --- Database Monitoring Setup ---
+	# --- Database Monitoring Setup ---
 	observer = None
 	db_id_storage_file_path = None 
 	event_handler = None # Initialize event_handler

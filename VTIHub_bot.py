@@ -686,129 +686,121 @@ def _generate_calculator_label_image(calc_data: Dict[str, Any]) -> Optional[Imag
 	current_y = margin_px # Start Y position
 
 	# --- Header Section ---
-	# (Complete header drawing logic as in your original file)
+	# (Complete header drawing logic as in your original file or previous refined version)
 	# This must correctly update current_y to the position after the header.
-	# For example:
 	try:
-		logo = Image.open(LOGO_PATH).convert("RGBA")
-		logo_size_px = mm2px(LOGO_SIZE_MM)
-		img.paste(logo, (margin_px, margin_px), logo)
-		header_text_x = margin_px + logo_size_px + mm2px(1)
-		header_y_start = margin_px
-		header_y_after_text = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y_start)
-		header_y_after_text = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y_after_text)
-		header_y_after_text = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y_after_text)
-		header_y_after_text = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y_after_text)
+		logo = Image.open(LOGO_PATH).convert("RGBA") #
+		logo_size_px = mm2px(LOGO_SIZE_MM) #
+		img.paste(logo, (margin_px, margin_px), logo) #
+		header_text_x = margin_px + logo_size_px + mm2px(1) #
+		header_y_start = margin_px #
+		header_y_after_text = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y_start) #
+		header_y_after_text = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y_after_text) #
+		header_y_after_text = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y_after_text) #
+		header_y_after_text = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y_after_text) #
 		
-		banner_bottom_y = max(margin_px + logo_size_px, header_y_after_text) + mm2px(1)
-		draw.line((0, banner_bottom_y, LABEL_WIDTH_PX, banner_bottom_y), fill=BORDER_COLOR, width=BORDER_WIDTH)
-		current_y = banner_bottom_y + mm2px(2)
-	except FileNotFoundError:
-		logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo for calculator label.")
-		header_text_x = margin_px
-		header_y_start = margin_px
-		header_y_after_text = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y_start)
-		header_y_after_text = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y_after_text)
-		header_y_after_text = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y_after_text)
-		# Missing one phone line from original here, add if needed
-		banner_bottom_y = header_y_after_text + mm2px(1)
-		draw.line((0, banner_bottom_y, LABEL_WIDTH_PX, banner_bottom_y), fill=BORDER_COLOR, width=BORDER_WIDTH)
-		current_y = banner_bottom_y + mm2px(2)
-	except Exception as e:
-		logger.error(f"Error drawing header for calculator label: {e}")
+		banner_bottom_y = max(margin_px + logo_size_px, header_y_after_text) + mm2px(1) #
+		draw.line((0, banner_bottom_y, LABEL_WIDTH_PX, banner_bottom_y), fill=BORDER_COLOR, width=BORDER_WIDTH) #
+		current_y = banner_bottom_y + mm2px(2) #
+	except FileNotFoundError: #
+		logger.warning(f"Logo file not found at {LOGO_PATH}. Skipping logo for calculator label.") #
+		header_text_x = margin_px #
+		header_y_start = margin_px #
+		header_y_after_text = _draw_text_line(draw, "ООО «ВТИ»", fonts["header"], header_text_x, header_y_start) #
+		header_y_after_text = _draw_text_line(draw, "ул Советская 26, г. Керчь", fonts["body"], header_text_x, header_y_after_text) #
+		header_y_after_text = _draw_text_line(draw, "+7 (978) 762‑8967", fonts["body"], header_text_x, header_y_after_text) #
+		# Add the fourth phone line if it was intended in your original design
+		# header_y_after_text = _draw_text_line(draw, "+7 (978) 010‑4949", fonts["body"], header_text_x, header_y_after_text)
+		banner_bottom_y = header_y_after_text + mm2px(1) #
+		draw.line((0, banner_bottom_y, LABEL_WIDTH_PX, banner_bottom_y), fill=BORDER_COLOR, width=BORDER_WIDTH) #
+		current_y = banner_bottom_y + mm2px(2) #
+	except Exception as e: #
+		logger.error(f"Error drawing header for calculator label: {e}") #
 		current_y = margin_px # Fallback if header fails
 
 	# --- Items List ---
-	body_x = margin_px
-	items_list = calc_data.get('items', [])
-	total_amount = calc_data.get('total', 0.0)
+	body_x = margin_px #
+	items_list_from_data = calc_data.get('items', []) #
+	total_amount = calc_data.get('total', 0.0) #
 
-	item_font = fonts["body"]
-	item_ascent, item_descent = item_font.getmetrics()
-	# Consistent line pitch for items, including full LINE_SPACING
-	item_one_line_pitch = item_ascent + item_descent + LINE_SPACING
+	item_font = fonts["body"] #
+	item_ascent, item_descent = item_font.getmetrics() #
+	item_one_line_pitch = item_ascent + item_descent + LINE_SPACING #
 	
-	price_area_width_px = mm2px(15) # Define this as it's used for item name truncation
+	price_area_width_px = mm2px(15) #
 
-	num_items_to_display = min(len(items_list), MAX_ITEMS_ON_LABEL)
+	total_original_item_count = len(items_list_from_data) # Get total number of items from data
+	num_items_to_display = min(total_original_item_count, MAX_ITEMS_ON_LABEL) #
 
 	for i in range(num_items_to_display):
-		item_data = items_list[i]
-		item_name = item_data.get('name', 'N/A')
-		item_price = item_data.get('price', 0.0)
+		item_data = items_list_from_data[i] #
+		item_name = item_data.get('name', 'N/A') #
+		item_price = item_data.get('price', 0.0) #
 		
-		# Truncate item name if it's too long horizontally
-		max_name_width = LABEL_WIDTH_PX - (2 * margin_px) - price_area_width_px - mm2px(2)
-		display_name = item_name
-		if item_font.getlength(display_name) > max_name_width:
-			avg_char_width_approx = item_font.getlength("X")
-			if avg_char_width_approx > 0: # Avoid division by zero
-				max_chars = int(max_name_width / avg_char_width_approx)
-				if len(display_name) > max_chars:
-					display_name = display_name[:max_chars - 3] + "..." if max_chars > 3 else display_name[:max_chars]
+		max_name_width = LABEL_WIDTH_PX - (2 * margin_px) - price_area_width_px - mm2px(2) #
+		display_name = item_name #
+		if item_font.getlength(display_name) > max_name_width: #
+			avg_char_width_approx = item_font.getlength("X") #
+			if avg_char_width_approx > 0: 
+				max_chars = int(max_name_width / avg_char_width_approx) #
+				if len(display_name) > max_chars: #
+					display_name = display_name[:max_chars - 3] + "..." if max_chars > 3 else display_name[:max_chars] #
 		
-		# Draw item name (left aligned)
-		draw.text((body_x, current_y), display_name, font=item_font, fill=TEXT_COLOR)
+		draw.text((body_x, current_y), display_name, font=item_font, fill=TEXT_COLOR) #
 		
-		# Draw item price (right aligned)
-		price_text = f"{item_price:.2f}"
-		price_text_length = item_font.getlength(price_text)
-		price_x = LABEL_WIDTH_PX - margin_px - price_text_length
-		draw.text((price_x, current_y), price_text, font=item_font, fill=TEXT_COLOR)
+		price_text = f"{item_price:.2f}" #
+		price_text_length = item_font.getlength(price_text) #
+		price_x = LABEL_WIDTH_PX - margin_px - price_text_length #
+		draw.text((price_x, current_y), price_text, font=item_font, fill=TEXT_COLOR) #
 
-		current_y += item_one_line_pitch # Advance current_y
+		current_y += item_one_line_pitch #
 
 	# --- Footer (Total Amount) ---
-	# Define fonts for footer elements (can be same as item_font or different)
 	footer_total_font = fonts["body"] 
-	footer_separator_font = fonts["body"] # For the "----" line
+	footer_separator_font = fonts["body"] 
 
-	# Calculate pitch for footer lines (using _draw_text_line's convention)
 	sep_ascent, sep_descent = footer_separator_font.getmetrics()
 	separator_line_pitch = sep_ascent + sep_descent + LINE_SPACING
 	
 	total_ascent, total_descent = footer_total_font.getmetrics()
 	total_text_line_pitch = total_ascent + total_descent + LINE_SPACING
 
-	footer_space_before_separator_px = mm2px(0)
-	footer_space_after_separator_px = mm2px(0)
+	footer_space_before_separator_px = mm2px(0) #
+	footer_space_after_separator_px = mm2px(0) #
+		
+	current_y += footer_space_before_separator_px #
+	current_y = _draw_text_line(draw, "----------------------------------", footer_separator_font, body_x, current_y, color=BORDER_COLOR) #
 	
-	# Store Y before starting footer, for potential restoration or logging
-	y_before_footer_attempt = current_y 
+	current_y += footer_space_after_separator_px #
+
+	# Construct the total string
+	if total_original_item_count > num_items_to_display:
+		processed_items_info = f" ({num_items_to_display} из {total_original_item_count} поз.)"
+		total_str = f"Итого{processed_items_info}: {total_amount:.2f}"
+	else:
+		total_str = f"Итого: {total_amount:.2f}" #
 	
-	# Draw separator
-	current_y += footer_space_before_separator_px
-	current_y = _draw_text_line(draw, "----------------------------------", footer_separator_font, body_x, current_y, color=BORDER_COLOR)
-	
-	# Draw total amount
-	current_y += footer_space_after_separator_px
-	total_str = f"Итого: {total_amount:.2f}"
-	total_text_length = footer_total_font.getlength(total_str)
-	total_x = LABEL_WIDTH_PX - margin_px - total_text_length
-	current_y = _draw_text_line(draw, total_str, footer_total_font, int(total_x), current_y, color=TEXT_COLOR)
+	total_text_length = footer_total_font.getlength(total_str) #
+	total_x = LABEL_WIDTH_PX - margin_px - total_text_length #
+	current_y = _draw_text_line(draw, total_str, footer_total_font, int(total_x), current_y, color=TEXT_COLOR) #
 
 	# --- Overflow Check ---
-	# current_y is now the Y-coordinate for the *top* of the line *after* the total.
-	# The content of the last line (total amount) ends at current_y - LINE_SPACING.
-	# This ending point should be within LABEL_HEIGHT_PX - margin_px.
-	if (current_y - LINE_SPACING) > (LABEL_HEIGHT_PX - margin_px):
+	if (current_y - LINE_SPACING) > (LABEL_HEIGHT_PX - margin_px): #
 		logger.warning(
-			f"Calculator label content overflow detected. "
-			f"MAX_ITEMS_ON_LABEL is {MAX_ITEMS_ON_LABEL}. "
-			f"Number of items displayed: {num_items_to_display}. "
-			f"Final Y position ({current_y - LINE_SPACING}) exceeded "
-			f"usable height ({LABEL_HEIGHT_PX - margin_px}). "
-			"Label generation aborted."
+			f"Calculator label content overflow detected. " #
+			f"MAX_ITEMS_ON_LABEL is {MAX_ITEMS_ON_LABEL}. " #
+			f"Number of items displayed: {num_items_to_display} out of {total_original_item_count}. "
+			f"Final Y position ({current_y - LINE_SPACING}) exceeded " #
+			f"usable height ({LABEL_HEIGHT_PX - margin_px}). " #
+			"Label generation aborted." #
 		)
-		return None # Signal error: content did not fit
+		return None 
 
-	# If more items existed in the original list than MAX_ITEMS_ON_LABEL,
-	# they are silently ignored in this simplified version.
-	if len(items_list) > num_items_to_display:
+	if total_original_item_count > num_items_to_display: #
 		logger.info(
-			f"Displayed {num_items_to_display} items out of {len(items_list)} due to MAX_ITEMS_ON_LABEL={MAX_ITEMS_ON_LABEL} limit."
+			f"Displayed {num_items_to_display} items out of {total_original_item_count} due to MAX_ITEMS_ON_LABEL={MAX_ITEMS_ON_LABEL} limit. Total line updated to reflect this."
 		)
-
+	
 	return img
 
 

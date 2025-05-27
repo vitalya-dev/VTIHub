@@ -233,14 +233,14 @@
 				<div class="input-group">
 					<label for="accessories">🔌 Комплектация</label>
 					<input
-							type="text"
-							id="accessories"
-							placeholder="Например: Блок питания, сумка"
-							inputmode="text"
-							enterkeyhint="done"
-							autocapitalize="sentences"
-							aria-label="Комплектация"
-							>
+						type="text"
+						id="accessories"
+						placeholder="Без комплектации"
+						inputmode="text"
+						enterkeyhint="done"
+						autocapitalize="sentences"
+						aria-label="Комплектация"
+					>
 					<div class="accessory-buttons"> 
 						<button type="button" class="accessory-btn" data-accessory="БП">+БП</button>
 						<button type="button" class="accessory-btn" data-accessory="Сумка">+Сумка</button>
@@ -308,45 +308,47 @@
 				const phoneInput = document.getElementById('phone');
 				const deviceModelInput = document.getElementById('deviceModel');
 				const issueDescriptionInput = document.getElementById('issueDescription');
-				const accessoriesInput = document.getElementById('accessories');
+				const accessoriesInput = document.getElementById('accessories'); // Get the accessories input element
 				const errorMessage = document.getElementById('error-message');
 
-				const phone = phoneInput.value; // Trim is handled in validatePhone
+				const phone = phoneInput.value;
 				const deviceModel = deviceModelInput.value.trim();
 				const issueDescription = issueDescriptionInput.value.trim();
-				const accessories = accessoriesInput.value.trim();
+				const accessories = accessoriesInput.value.trim(); // Get the trimmed value
 
 				errorMessage.textContent = '';
 
 				const phoneValidationResult = validatePhone(phone);
 				if (!phoneValidationResult.isValid) {
-						errorMessage.textContent = phoneValidationResult.message;
-						phoneInput.focus();
-						return;
+					errorMessage.textContent = phoneValidationResult.message;
+					phoneInput.focus();
+					return;
 				}
 
 				if (deviceModel === '') {
-						errorMessage.textContent = 'Пожалуйста, введите модель техники.';
-						deviceModelInput.focus();
-						return;
+					errorMessage.textContent = 'Пожалуйста, введите модель техники.';
+					deviceModelInput.focus();
+					return;
 				}
 
-				// Using the validateDescription function for consistency
 				if (!validateDescription(issueDescription)) {
-						errorMessage.textContent = 'Пожалуйста, опишите характер неисправности.';
-						issueDescriptionInput.focus();
-						return;
+					errorMessage.textContent = 'Пожалуйста, опишите характер неисправности.';
+					issueDescriptionInput.focus();
+					return;
 				}
 
 				if (typeof Telegram === 'undefined' || !Telegram.WebApp) {
-						errorMessage.textContent = 'Веб-приложение Telegram недоступно.';
-						// Consider disabling the send button or providing more user feedback
-						return;
+					errorMessage.textContent = 'Веб-приложение Telegram недоступно.';
+					return;
 				}
 
 				let combinedDescription = `${deviceModel}. ${issueDescription}`;
-				if (accessories) { // If 'accessories' is not an empty string
-					combinedDescription += `. ${accessories}`;
+
+				// Updated logic for accessories:
+				if (accessories) { // If the user entered something or used buttons
+					combinedDescription += `. Комплектация: ${accessories}`;
+				} else { // If the accessories field is empty (placeholder was showing)
+					combinedDescription += `. Комплектация: Без комплектации`;
 				}
 
 				const data = {

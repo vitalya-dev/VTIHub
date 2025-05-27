@@ -478,7 +478,7 @@ IRFANVIEW_ABS_PATH = os.path.join(SCRIPT_DIR, IRFANVIEW_EXECUTABLE_NAME)
 FONT_SIZE_HEADER = 28
 FONT_SIZE_BODY = 22
 FONT_SIZE_TICKET_DETAILS = 24
-FONT_SIZE_SMALL = 14
+FONT_SIZE_SMALL = 18
 
 
 # Layout & Styling
@@ -640,7 +640,7 @@ def _generate_ticket_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image
 
 	# --- Description Section ---
 	# desc_y calculation is based on body_y, which is the Y position after "Время:"
-	desc_y = body_y + mm2px(1) 
+	desc_y = body_y + mm2px(0) 
 	desc_y = _draw_text_line(draw, "Описание:", fonts["ticket_details"], body_x, desc_y)
 	
 	description = ticket.get("d", "")
@@ -664,7 +664,7 @@ def _generate_ticket_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image
 		lines_to_draw = wrapped_lines[:2] # Take the first two lines or the only line
 
 	for line_text in lines_to_draw:
-		desc_y = _draw_text_line(draw, line_text, fonts["body"], body_x, desc_y)
+		desc_y = _draw_text_line(draw, line_text, fonts["small"], body_x, desc_y)
 
 	return img
 

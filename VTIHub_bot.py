@@ -644,7 +644,7 @@ def _generate_ticket_label_image(ticket: Dict[str, Any]) -> Optional[Image.Image
 	desc_y = _draw_text_line(draw, "Описание:", fonts["ticket_details"], body_x, desc_y)
 	
 	description = ticket.get("d", "")
-	wrap_width = 46
+	wrap_width = 42
 	wrapped_lines = textwrap.wrap(description, width=wrap_width) # Get all wrapped lines
 
 	lines_to_draw = []

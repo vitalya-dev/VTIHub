@@ -60,6 +60,10 @@ DEBUG_WEB_APP_URLS = {
 }
 
 TARGET_CHANNEL_ID = "-1002558046400" # Or e.g., -1001234567890
+# NEW: Anti-Spam Configuration
+PRINT_COOLDOWN_SECONDS = 2  # Don't allow printing the same ticket twice in 2 seconds
+print_cooldowns = {}  # Memory storage: {message_id: timestamp}
+BOT_START_TIME = time.time()
 
 TICKETS_DATA_MARKER = "Encoded Data:" # For tickets
 CALC_DATA_MARKER = "Calculator Encoded Data:" # For calculator data
@@ -831,6 +835,32 @@ async def handle_ticket_print_callback(update: Update, context: ContextTypes.DEF
 	if not query:
 		logger.warning("Received callback event without query object.")
 		return
+		
+	# --- SHIELD 1: Startup Timer (Protects against PC Restarts) ---
+	# If bot woke up < 15 seconds ago, ignore everything.
+	if time.time() - BOT_START_TIME < 15:
+		try:
+			await query.answer("⚠️ Бот только проснулся. Нажмите еще раз.", show_alert=False)
+		except: pass
+		return
+
+	# --- SHIELD 2: Cooldown (Protects against Internet Loss) ---
+	# Creates a unique ID for this specific message
+	msg_key = (query.message.chat_id, query.message.message_id)
+	current_time = time.time()
+	
+	# If we already printed this message less than 10 seconds ago, STOP.
+	if msg_key in print_cooldowns:
+		last_time = print_cooldowns[msg_key]
+		if current_time - last_time < PRINT_COOLDOWN_SECONDS:
+			logger.info(f"Skipping spam/queued click for {msg_key}")
+			# Silently ignore the spam
+			await query.answer() 
+			return
+
+	# Update the time so we block future clicks
+	print_cooldowns[msg_key] = current_time
+	# -------------------------------------------------------------
 
 	await query.answer() # Acknowledge the callback
 
